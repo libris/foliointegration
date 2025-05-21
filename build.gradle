@@ -46,9 +46,6 @@ task(appRun, dependsOn: "classes", type: JavaExec) {
     mainClass = mainClassName
     minHeapSize = "1g"
     maxHeapSize = "4g"
-    systemProperties(
-            'http.port': System.getProperty("http.port", "8080")
-    )
     args(System.getProperty("args", "").split() as String[])
 
     debugOptions {

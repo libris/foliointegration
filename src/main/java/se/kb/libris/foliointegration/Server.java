@@ -48,7 +48,5 @@ public class Server {
 
         server.start();
         server.join();
-
-        //String whatever = System.getProperty("WHATEVER"); // -D-varianten
     }
 }

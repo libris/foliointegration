@@ -6,6 +6,7 @@ import javax.servlet.http.HttpServletResponse;
 
 public class IntegrationServlet extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+        Storage.whatever();
         response.setStatus(200);
     }
 

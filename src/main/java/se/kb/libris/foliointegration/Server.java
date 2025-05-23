@@ -47,6 +47,14 @@ public class Server {
         context.addServlet(holder, "/");
 
         server.start();
+
+        if (Storage.getState("Started") == null) {
+            Storage.log("STARTING FROM ZERO!");
+        } else {
+            Storage.log("CONTINUING WITH EXISTING STATE!");
+        }
+        Storage.writeState("Started", "Yupp!");
+
         server.join();
     }
 }

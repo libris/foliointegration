@@ -10,6 +10,10 @@ public class Storage {
 
     private static Connection _connection = null;
 
+    public static void log(String message) {
+        System.err.println(message);
+    }
+
     public static void log(String message, Exception e) {
         System.err.println(message);
         e.printStackTrace(System.err);
@@ -46,7 +50,8 @@ public class Storage {
             String sql = """
                     CREATE TABLE state (
                             id INTEGER PRIMARY KEY,
-                            changes_consumed_until TEXT
+                            key TEXT UNIQUE,
+                            value TEXT
                         );
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -95,13 +100,44 @@ public class Storage {
 
             return _connection;
         } catch (Exception e) {
-            log("Did you forget the mount the /data volume? SQLITE3 failure (unrecoverable).", e);
+            log("Did you forget to mount the /data volume? SQLITE3 failure (unrecoverable).", e);
             System.exit(1);
         }
         return null; // can't happen
     }
 
-    public static synchronized void whatever() {
+    public static synchronized void writeState(String key, String value) {
         Connection connection = getConnection();
+        String sql = """
+                    INSERT INTO STATE (key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value;
+                    """.stripIndent();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, key);
+            statement.setString(2, value);
+            statement.execute();
+        } catch (SQLException e) {
+            log("Could not write state (unrecoverable).", e);
+            System.exit(1);
+        }
+    }
+
+    public static synchronized String getState(String key) {
+        Connection connection = getConnection();
+        String sql = """
+                    SELECT value FROM STATE WHERE key = ?;
+                    """.stripIndent();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, key);
+            statement.execute();
+            try(ResultSet resultSet = statement.getResultSet()) {
+                if (resultSet.next()) {
+                    return resultSet.getString(1);
+                }
+            }
+        } catch (SQLException e) {
+            log("Could not read state (unrecoverable).", e);
+            System.exit(1);
+        }
+        return null;
     }
 }

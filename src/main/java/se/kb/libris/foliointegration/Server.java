@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 
 public class Server {
+
     private static org.eclipse.jetty.server.Server createServer() {
         int maxConnections = 50;
         var queue = new ArrayBlockingQueue<Runnable>(maxConnections);
@@ -34,6 +35,7 @@ public class Server {
 
         return server;
     }
+
     public static void main(String[] args) throws Exception {
 
         var server = createServer();
@@ -46,15 +48,32 @@ public class Server {
         holder.setInitOrder(0);
         context.addServlet(holder, "/");
 
+        // Set the initial state if needed
+        {
+            Storage.APPLICATION_STATE state = Storage.getApplicationState();
+            if (state == null) {
+                Storage.log("No previous state detected.");
+                Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_FROM_LIBRIS);
+            } else {
+                Storage.log("Application starting in state: " + state);
+            }
+        }
+
         server.start();
 
-        if (Storage.getState("Started") == null) {
-            Storage.log("STARTING FROM ZERO!");
-        } else {
-            Storage.log("CONTINUING WITH EXISTING STATE!");
+        // The main loop
+        while (true) {
+            Storage.APPLICATION_STATE state = Storage.getApplicationState();
+            switch (state) {
+                case INITIAL_LOAD_FROM_LIBRIS:
+                    EmmDumpImporter.run();
+                    break;
+                case INITIAL_LOAD_TO_FOLIO:
+                    break;
+                case STAYING_IN_SYNC:
+                    break;
+            }
         }
-        Storage.writeState("Started", "Yupp!");
-
-        server.join();
+        //server.join(); // unreachable
     }
 }

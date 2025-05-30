@@ -152,7 +152,7 @@ public class Storage {
         }
     }
 
-    private static synchronized Connection getConnection() {
+    public static synchronized Connection getConnection() {
         if (_connection != null)
             return _connection;
 
@@ -174,6 +174,7 @@ public class Storage {
                 initDb(_connection);
             }
 
+            _connection.setAutoCommit(false);
             return _connection;
         } catch (Exception e) {
             log("Did you forget to mount the /data volume? SQLITE3 failure (unrecoverable).", e);
@@ -185,12 +186,13 @@ public class Storage {
     public static synchronized void writeState(String key, String value) {
         Connection connection = getConnection();
         String sql = """
-                    INSERT INTO STATE (key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value;
+                    INSERT INTO state (key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value;
                     """.stripIndent();
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, key);
             statement.setString(2, value);
             statement.execute();
+            connection.commit();
         } catch (SQLException e) {
             log("Could not write state (unrecoverable).", e);
             System.exit(1);
@@ -200,11 +202,12 @@ public class Storage {
     public static synchronized void clearState(String key) {
         Connection connection = getConnection();
         String sql = """
-                    DELETE FROM STATE WHERE KEY = ?;
+                    DELETE FROM state WHERE KEY = ?;
                     """.stripIndent();
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, key);
             statement.execute();
+            connection.commit();
         } catch (SQLException e) {
             log("Could not clear state (unrecoverable).", e);
             System.exit(1);
@@ -214,11 +217,12 @@ public class Storage {
     public static synchronized String getState(String key) {
         Connection connection = getConnection();
         String sql = """
-                    SELECT value FROM STATE WHERE key = ?;
+                    SELECT value FROM state WHERE key = ?;
                     """.stripIndent();
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, key);
             statement.execute();
+            connection.commit();
             try(ResultSet resultSet = statement.getResultSet()) {
                 if (resultSet.next()) {
                     return resultSet.getString(1);

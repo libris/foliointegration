@@ -8,10 +8,11 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.ZonedDateTime;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Map;
+import java.util.*;
 
 
 public class EmmDumpImporter {
@@ -30,46 +31,67 @@ public class EmmDumpImporter {
         startIfNotStarted();
 
         // Set initial offset if needed
-        {
-            String offset = Storage.getState(OFFSET_KEY);
-            if (offset == null) {
-                Storage.writeState(OFFSET_KEY, "" + 0);
-            }
+        String offset = Storage.getState(OFFSET_KEY);
+        if (offset == null) {
+            Storage.writeState(OFFSET_KEY, "" + 1); // 1 to skip initial context bs.
         }
 
+        offset = Storage.getState(OFFSET_KEY);
+        String dumpId = Storage.getState(DUMP_ID_KEY);
 
-        Deque<Thread> pageQueue = new ArrayDeque<>();
-
-        // Download a page
-        String offset = Storage.getState(OFFSET_KEY);
-    }
-
-    private static void downloadPage(String offset, Deque<Thread> pageQueue) {
         try (HttpClient client = HttpClient.newHttpClient()) {
             URI uri = new URI(emmBaseUrl).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(uri)
-                    .GET()
-                    .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            Map<?, ?> responseMap = mapper.readValue(response.body(), Map.class);
+            while (uri != null) {
+                System.err.println(uri);
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(uri)
+                        .GET()
+                        .build();
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                Map<?, ?> responseMap = mapper.readValue(response.body(), Map.class);
 
-            // Possibly pre-fetch more pages
-            /*
-            String NEXTOFFSET = "100"; // TEMP
-            synchronized (pageQueue) {
-                if (pageQueue.size() < maxThreads) {
-                    Thread.ofPlatform().name("Page fetch").start(new Runnable() {
-                        public void run() {
-                            downloadPage(NEXTOFFSET, pageQueue);
-                        }
-                    });
+                if (responseMap.containsKey("next")) {
+                    uri = new URI( (String) responseMap.get("next") );
+                } else {
+                    uri = null;
                 }
-            }*/
 
-        } catch (URISyntaxException | IOException | InterruptedException e) {
+                if (responseMap.containsKey("startTime")) {
+                    if (!dumpId.equals( responseMap.get("startTime") )) {
+                        return; // This will result in a restart (now that the timestamp has changed)
+                    }
+                }
+
+                if (responseMap.containsKey("items")) {
+                    List<?> items = (List<?>) responseMap.get("items");
+                    offset = "" + (Integer.parseInt(offset) + items.size());
+
+                    Connection connection = Storage.getConnection();
+                    for (Object item : items) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> itemMap = (Map<String, Object>) item;
+                        if (itemMap.containsKey("@graph")) {
+                            HashMap<String, Object> docMap = new HashMap<>();
+                            docMap.put("@graph", itemMap.get("@graph")); // We just want the graph list, not the other attached stuff
+                            // Write records here..
+                        }
+                    }
+                    String sql = "UPDATE state SET value = ? WHERE key = ?;";
+                    try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                        statement.setString(1, offset);
+                        statement.setString(2, OFFSET_KEY);
+                        statement.execute();
+                    }
+
+                    // Do actual writes first..
+
+                    connection.commit();
+                }
+            }
+        } catch (URISyntaxException | IOException | InterruptedException | SQLException e) {
             Storage.log("Page download failed (will be retried).", e);
         }
+
     }
 
     private static void startIfNotStarted() {

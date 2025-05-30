@@ -3,6 +3,7 @@ package se.kb.libris.foliointegration;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.*;
+import java.time.ZonedDateTime;
 
 import org.sqlite.SQLiteConfig;
 
@@ -31,13 +32,13 @@ public class Storage {
 
     public static void log(String message) {
         synchronized (System.err) {
-            System.err.println(message);
+            System.err.println(ZonedDateTime.now() + ": " + message);
         }
     }
 
     public static void logWithCallstack(String message) {
         synchronized (System.err) {
-            System.err.println(message + " at:");
+            System.err.println(ZonedDateTime.now() + ": " + message + " at:");
             StackTraceElement[] frames = Thread.currentThread().getStackTrace();
             for (int i = 2; i < frames.length; ++i) {
                 System.err.println(frames[i]);
@@ -48,7 +49,7 @@ public class Storage {
 
     public static void log(String message, Exception e) {
         synchronized (System.err) {
-            System.err.println(message);
+            System.err.println(ZonedDateTime.now() + ": " + message);
             e.printStackTrace(System.err);
             System.err.println("---------------");
         }
@@ -192,6 +193,20 @@ public class Storage {
             statement.execute();
         } catch (SQLException e) {
             log("Could not write state (unrecoverable).", e);
+            System.exit(1);
+        }
+    }
+
+    public static synchronized void clearState(String key) {
+        Connection connection = getConnection();
+        String sql = """
+                    DELETE FROM STATE WHERE KEY = ?;
+                    """.stripIndent();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, key);
+            statement.execute();
+        } catch (SQLException e) {
+            log("Could not clear state (unrecoverable).", e);
             System.exit(1);
         }
     }

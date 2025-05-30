@@ -1,5 +1,4 @@
 plugins {
-    id "nebula.lint" version "20.2.0"
     id "com.github.johnrengelman.shadow" version "8.1.1"
 }
 
@@ -19,11 +18,11 @@ repositories {
 }
 
 dependencies {
-    // Servlet
-    api "jakarta.servlet:jakarta.servlet-api:4.0.3"
+    implementation "jakarta.servlet:jakarta.servlet-api:4.0.3"
     implementation "org.eclipse.jetty:jetty-server:12.0.6"
     implementation "org.eclipse.jetty.ee8:jetty-ee8-servlet:12.0.6"
-    implementation("org.xerial:sqlite-jdbc:3.49.1.0")
+    implementation "org.xerial:sqlite-jdbc:3.49.1.0"
+    implementation "org.codehaus.jackson:jackson-mapper-asl:1.9.13"
 }
 
 shadowJar {

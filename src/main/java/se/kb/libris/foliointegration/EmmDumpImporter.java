@@ -21,9 +21,7 @@ public class EmmDumpImporter {
     private final static String OFFSET_KEY = "DumpStateOffset";
     private final static String DUMP_ID_KEY = "DumpStateCreationTime";
 
-    public static final ObjectMapper mapper = new ObjectMapper();
-
-    static String emmBaseUrl = "https://libris-qa.kb.se/api/emm/"; // temp
+    static String emmBaseUrl = "https://libris-dev.kb.se/api/emm/"; // temp
     static String sigel = "X"; // temp
     static int maxThreads = 8; // temp
 
@@ -64,12 +62,13 @@ public class EmmDumpImporter {
                     offset = "" + (Integer.parseInt(offset) + items.size());
 
                     Connection connection = Storage.getConnection();
+                    var threads = new ArrayList<Thread>(100);
                     for (Object item : items) {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         if (itemMap.containsKey("@graph")) {
-                            HashMap<String, Object> docMap = new HashMap<>();
-                            docMap.put("@graph", itemMap.get("@graph")); // We just want the graph list, not the other attached stuff
-                            // Write records here..
+                            // We just want the graph list, not the other attached stuff
+                            Thread t = Thread.startVirtualThread(() -> Records.importRootRecord( (List<?>) itemMap.get("@graph"), connection));
+                            threads.add(t);
                         }
                     }
                     String sql = "UPDATE state SET value = ? WHERE key = ?;";
@@ -79,11 +78,22 @@ public class EmmDumpImporter {
                         statement.execute();
                     }
 
-                    // Do actual writes first..
+                    for (Thread t : threads) {
+                        try {
+                            t.join();
+                        } catch (InterruptedException e) {
+                            Storage.log("Thread interrupted. This is a bug (fatal).", e);
+                            System.exit(1);
+                        }
+                    }
 
-                    connection.commit();
+                    connection.commit(); // The record writes AND our new consumed offset together
                 }
             }
+
+            // If/when we get here, the 'next' uri is null, meaning the dump download is finished.
+            Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_TO_FOLIO);
+
         } catch (URISyntaxException | SQLException e) {
             Storage.log("Page download failed (will be retried).", e);
         }
@@ -111,7 +121,7 @@ public class EmmDumpImporter {
                             .GET()
                             .build();
                     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                    prefetchedPages.put( uri.toString(), mapper.readValue(response.body(), Map.class) );
+                    prefetchedPages.put( uri.toString(), Storage.mapper.readValue(response.body(), Map.class) );
                     } catch (IOException | InterruptedException e) {
                         prefetchedPages.remove(uri.toString());
                         Storage.log("Page prefetch failed.", e);
@@ -160,7 +170,7 @@ public class EmmDumpImporter {
                     .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            Map<?, ?> responseMap = mapper.readValue(response.body(), Map.class);
+            Map<?, ?> responseMap = Storage.mapper.readValue(response.body(), Map.class);
             if (responseMap.containsKey("startTime")) {
                 String startTime = (String) responseMap.get("startTime");
                 ZonedDateTime.parse(startTime); // parses correctly or throws

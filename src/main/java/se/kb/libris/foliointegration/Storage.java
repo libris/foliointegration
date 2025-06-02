@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.sql.*;
 import java.time.ZonedDateTime;
 
+import org.codehaus.jackson.map.ObjectMapper;
 import org.sqlite.SQLiteConfig;
 
 public class Storage {
@@ -25,6 +26,8 @@ public class Storage {
         // iterative updates.
         STAYING_IN_SYNC,
     }
+
+    public static final ObjectMapper mapper = new ObjectMapper();
 
     private static final String APPLICATION_STATE_KEY = "ApplicationState";
 

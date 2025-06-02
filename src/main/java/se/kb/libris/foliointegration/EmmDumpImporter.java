@@ -25,7 +25,7 @@ public class EmmDumpImporter {
 
     static String emmBaseUrl = "https://libris-qa.kb.se/api/emm/"; // temp
     static String sigel = "X"; // temp
-    static int maxThreads = 4; // temp
+    static int maxThreads = 8; // temp
 
     static final ConcurrentHashMap<String, Map<String, ?>> prefetchedPages = new ConcurrentHashMap<>();
 
@@ -102,6 +102,7 @@ public class EmmDumpImporter {
             if (prefetchedPages.containsKey(uri.toString()))
                 return;
             prefetchedPages.put(uri.toString(), new HashMap<>());
+
             Thread.ofPlatform().name("EMM prefetch").start(new Runnable() {
                 public void run() {
                     try (HttpClient client = HttpClient.newHttpClient()) {
@@ -131,27 +132,19 @@ public class EmmDumpImporter {
             prefetchPage(offset + 100 * i); // That the dump page size is 100 is an assumption, which MUST hold true for this to work correctly.
         }
 
-        try (HttpClient client = HttpClient.newHttpClient()) {
+        try {
             URI uri = new URI(emmBaseUrl).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
 
-            if (prefetchedPages.containsKey(uri.toString())) {
-                var page = prefetchedPages.get(uri.toString());
-                var emptyMap = new HashMap<>();
-                while (page.equals(emptyMap)) {
-                    Thread.sleep(1);
-                    page = prefetchedPages.get(uri.toString());
-                }
-                prefetchedPages.remove(uri.toString());
-                return page;
+            var emptyMap = new HashMap<>();
+            var page = prefetchedPages.get(uri.toString());
+            while (page == null || page.equals(emptyMap)) {
+                Thread.sleep(1);
+                page = prefetchedPages.get(uri.toString());
             }
+            prefetchedPages.remove(uri.toString());
+            return page;
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(uri)
-                    .GET()
-                    .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            return mapper.readValue(response.body(), Map.class);
-        } catch (URISyntaxException | IOException | InterruptedException e) {
+        } catch (URISyntaxException | InterruptedException e) {
             Storage.log("Page download failed (will be retried).", e);
         }
         return null;

@@ -13,6 +13,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 public class EmmDumpImporter {
@@ -25,6 +26,8 @@ public class EmmDumpImporter {
     static String emmBaseUrl = "https://libris-qa.kb.se/api/emm/"; // temp
     static String sigel = "X"; // temp
     static int maxThreads = 4; // temp
+
+    static final ConcurrentHashMap<String, Map<String, ?>> prefetchedPages = new ConcurrentHashMap<>();
 
     public static void run() {
 
@@ -39,16 +42,10 @@ public class EmmDumpImporter {
         offset = Storage.getState(OFFSET_KEY);
         String dumpId = Storage.getState(DUMP_ID_KEY);
 
-        try (HttpClient client = HttpClient.newHttpClient()) {
+        try {
             URI uri = new URI(emmBaseUrl).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
             while (uri != null) {
-                System.err.println(uri);
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(uri)
-                        .GET()
-                        .build();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                Map<?, ?> responseMap = mapper.readValue(response.body(), Map.class);
+                Map<String, ?> responseMap = getPage(Integer.parseInt(offset));
 
                 if (responseMap.containsKey("next")) {
                     uri = new URI( (String) responseMap.get("next") );
@@ -68,7 +65,6 @@ public class EmmDumpImporter {
 
                     Connection connection = Storage.getConnection();
                     for (Object item : items) {
-                        @SuppressWarnings("unchecked")
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         if (itemMap.containsKey("@graph")) {
                             HashMap<String, Object> docMap = new HashMap<>();
@@ -88,10 +84,77 @@ public class EmmDumpImporter {
                     connection.commit();
                 }
             }
-        } catch (URISyntaxException | IOException | InterruptedException | SQLException e) {
+        } catch (URISyntaxException | SQLException e) {
             Storage.log("Page download failed (will be retried).", e);
         }
 
+    }
+
+    /**
+     * Call only from the main thread, or risk a race condition.
+     */
+    private static void prefetchPage(int offset) {
+        try {
+            URI uri = new URI(emmBaseUrl).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+
+            // Place an empty map with this key when starting. This will be a signal that the page is already being
+            // downloaded, and should be waited for rather than re-downloaded.
+            if (prefetchedPages.containsKey(uri.toString()))
+                return;
+            prefetchedPages.put(uri.toString(), new HashMap<>());
+            Thread.ofPlatform().name("EMM prefetch").start(new Runnable() {
+                public void run() {
+                    try (HttpClient client = HttpClient.newHttpClient()) {
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(uri)
+                            .GET()
+                            .build();
+                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    prefetchedPages.put( uri.toString(), mapper.readValue(response.body(), Map.class) );
+                    } catch (IOException | InterruptedException e) {
+                        prefetchedPages.remove(uri.toString());
+                        Storage.log("Page prefetch failed.", e);
+                    }
+                }
+            });
+
+        } catch (URISyntaxException e) {
+            Storage.log("Page prefetch failed.", e);
+        }
+    }
+
+    private static Map<String, ?> getPage(int offset) {
+        System.err.println("Fetching at offset: " + offset);
+
+        // Start prefetching of subsequent pages, if not already on the way:
+        for (int i = 0; i < maxThreads; ++i) {
+            prefetchPage(offset + 100 * i); // That the dump page size is 100 is an assumption, which MUST hold true for this to work correctly.
+        }
+
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            URI uri = new URI(emmBaseUrl).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+
+            if (prefetchedPages.containsKey(uri.toString())) {
+                var page = prefetchedPages.get(uri.toString());
+                var emptyMap = new HashMap<>();
+                while (page.equals(emptyMap)) {
+                    Thread.sleep(1);
+                    page = prefetchedPages.get(uri.toString());
+                }
+                prefetchedPages.remove(uri.toString());
+                return page;
+            }
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(uri)
+                    .GET()
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return mapper.readValue(response.body(), Map.class);
+        } catch (URISyntaxException | IOException | InterruptedException e) {
+            Storage.log("Page download failed (will be retried).", e);
+        }
+        return null;
     }
 
     private static void startIfNotStarted() {

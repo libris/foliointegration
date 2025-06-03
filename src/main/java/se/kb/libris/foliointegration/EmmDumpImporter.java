@@ -68,13 +68,11 @@ public class EmmDumpImporter {
                     List<?> items = (List<?>) responseMap.get("items");
                     offset = "" + (Integer.parseInt(offset) + items.size());
 
-                    var threads = new ArrayList<Thread>(100);
                     for (Object item : items) {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         if (itemMap.containsKey("@graph")) {
                             // We just want the graph list, not the other attached stuff
-                            Thread t = Thread.startVirtualThread(() -> Records.writeNewRootRecord((List<?>) itemMap.get("@graph"), connection));
-                            threads.add(t);
+                            Records.writeNewRootRecord((List<?>) itemMap.get("@graph"), connection);
                         }
                     }
                     String sql = "UPDATE state SET value = ? WHERE key = ?;";
@@ -82,15 +80,6 @@ public class EmmDumpImporter {
                         statement.setString(1, offset);
                         statement.setString(2, OFFSET_KEY);
                         statement.execute();
-                    }
-
-                    for (Thread t : threads) {
-                        try {
-                            t.join();
-                        } catch (InterruptedException e) {
-                            Storage.log("Thread interrupted. This is a bug (fatal).", e);
-                            System.exit(1);
-                        }
                     }
 
                     connection.commit(); // The record writes AND our new consumed offset together

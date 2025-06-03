@@ -1,7 +1,5 @@
 package se.kb.libris.foliointegration;
 
-import org.codehaus.jackson.map.ObjectMapper;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -67,7 +65,7 @@ public class EmmDumpImporter {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         if (itemMap.containsKey("@graph")) {
                             // We just want the graph list, not the other attached stuff
-                            Thread t = Thread.startVirtualThread(() -> Records.importRootRecord( (List<?>) itemMap.get("@graph"), connection));
+                            Thread t = Thread.startVirtualThread(() -> Records.writeNewRootRecord( (List<?>) itemMap.get("@graph"), connection));
                             threads.add(t);
                         }
                     }

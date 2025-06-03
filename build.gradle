@@ -23,6 +23,7 @@ dependencies {
     implementation "org.eclipse.jetty.ee8:jetty-ee8-servlet:12.0.6"
     implementation "org.xerial:sqlite-jdbc:3.49.1.0"
     implementation "org.codehaus.jackson:jackson-mapper-asl:1.9.13"
+    implementation "org.slf4j:slf4j-simple:2.0.17" // Redirect jetty logs to stderr
 }
 
 shadowJar {

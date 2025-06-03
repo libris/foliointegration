@@ -66,14 +66,18 @@ public class Server {
             Storage.APPLICATION_STATE state = Storage.getApplicationState();
             switch (state) {
                 case INITIAL_LOAD_FROM_LIBRIS:
-                    EmmDumpImporter.run();
+                    new EmmDumpImporter().run();
                     break;
                 case INITIAL_LOAD_TO_FOLIO:
+                    // TEMP! ACTUALLY SYNC TO FOLIO EVENTUALLY!
+                    Storage.transitionToApplicationState(Storage.APPLICATION_STATE.STAYING_IN_SYNC);
                     break;
                 case STAYING_IN_SYNC:
+
                     break;
             }
         }
+
         //server.join(); // unreachable
     }
 }

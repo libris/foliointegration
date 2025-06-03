@@ -18,14 +18,18 @@ public class EmmDumpImporter {
 
     private final static String OFFSET_KEY = "DumpStateOffset";
     private final static String DUMP_ID_KEY = "DumpStateCreationTime";
+    private final static String DUMP_SIGEL_KEY = "DumpStateSigel";
+    private final static int maxThreads = 8;
 
-    static String emmBaseUrl = "https://libris-qa.kb.se/api/emm/"; // temp
-    static String sigel = "X"; // temp
-    static int maxThreads = 8; // temp
-
-    static final ConcurrentHashMap<String, Map<String, ?>> prefetchedPages = new ConcurrentHashMap<>();
+    final static ConcurrentHashMap<String, Map<String, ?>> prefetchedPages = new ConcurrentHashMap<>();
+    static String sigel;
 
     public static void run() {
+        sigel = Storage.getState(DUMP_SIGEL_KEY);
+        if (sigel == null) {
+            sigel = System.getenv("SIGEL").split(",")[0];
+            Storage.writeState(DUMP_SIGEL_KEY, sigel);
+        }
 
         startIfNotStarted();
 
@@ -39,7 +43,7 @@ public class EmmDumpImporter {
         String dumpId = Storage.getState(DUMP_ID_KEY);
 
         try {
-            URI uri = new URI(emmBaseUrl).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+            URI uri = new URI(System.getenv("EMMBASEURL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
             while (uri != null) {
                 Map<String, ?> responseMap = getPage(Integer.parseInt(offset));
 
@@ -90,7 +94,7 @@ public class EmmDumpImporter {
             }
 
             // If/when we get here, the 'next' uri is null, meaning the dump download is finished.
-            Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_TO_FOLIO);
+            finalizeDumpDownload();
 
         } catch (URISyntaxException | SQLException e) {
             Storage.log("Page download failed (will be retried).", e);
@@ -98,12 +102,62 @@ public class EmmDumpImporter {
 
     }
 
+    private static void finalizeDumpDownload() {
+        Storage.log("EMM dump download complete, for sigel: " + sigel);
+
+        // If there are more dumps to download, set starting conditions for the next one.
+        try (Connection connection = Storage.getConnection()) {
+
+            Storage.clearState(OFFSET_KEY);
+            Storage.clearState(DUMP_ID_KEY);
+
+            // Clear the dump download state
+            {
+                String sql = "DELETE FROM state WHERE key = ?;";
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, OFFSET_KEY);
+                    statement.execute();
+                }
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, DUMP_ID_KEY);
+                    statement.execute();
+                }
+            }
+
+            String[] sigelList = System.getenv("SIGEL").split(",");
+            int currentSigelIndex = 0;
+            for (int i = 0; i < sigelList.length; ++i) {
+                if (sigel.equals(sigelList[i])) {
+                    currentSigelIndex = i;
+                    break;
+                }
+            }
+            if (currentSigelIndex < sigelList.length - 1) {
+                sigel = sigelList[currentSigelIndex + 1];
+
+                String sql = "UPDATE state SET value = ? WHERE key = ?;";
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, sigel);
+                    statement.setString(2, DUMP_SIGEL_KEY);
+                    statement.execute();
+                }
+
+                connection.commit();
+
+            } else {
+                Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_TO_FOLIO);
+            }
+        } catch (SQLException e) {
+            Storage.log("Dump finalization failed.", e);
+        }
+    }
+
     /**
      * Call only from the main thread, or risk a race condition.
      */
     private static void prefetchPage(int offset) {
         try {
-            URI uri = new URI(emmBaseUrl).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+            URI uri = new URI(System.getenv("EMMBASEURL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
 
             // Place an empty map with this key when starting. This will be a signal that the page is already being
             // downloaded, and should be waited for rather than re-downloaded.
@@ -133,15 +187,13 @@ public class EmmDumpImporter {
     }
 
     private static Map<String, ?> getPage(int offset) {
-        System.err.println("Fetching at offset: " + offset);
-
         // Start prefetching of subsequent pages, if not already on the way:
         for (int i = 0; i < maxThreads; ++i) {
             prefetchPage(offset + 100 * i); // That the dump page size is 100 is an assumption, which MUST hold true for this to work correctly.
         }
 
         try {
-            URI uri = new URI(emmBaseUrl).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+            URI uri = new URI(System.getenv("EMMBASEURL")).resolve("full?selection=itemAndInstance:" + Storage.getState(DUMP_SIGEL_KEY) + "&offset=" + offset);
 
             var emptyMap = new HashMap<>();
             var page = prefetchedPages.get(uri.toString());
@@ -161,7 +213,7 @@ public class EmmDumpImporter {
     private static void startIfNotStarted() {
         try (HttpClient client = HttpClient.newHttpClient()) {
 
-            URI uri = new URI(emmBaseUrl).resolve("full?selection=itemAndInstance:" + sigel + "&offset=0");
+            URI uri = new URI(System.getenv("EMMBASEURL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=0");
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(uri)
                     .GET()
@@ -175,7 +227,7 @@ public class EmmDumpImporter {
 
                 String dumpId = Storage.getState(DUMP_ID_KEY);
                 if (dumpId == null) { // This means no dump download is in progress. Time to start.
-                    Storage.log("Starting download of EMM dump with creation time: " + startTime);
+                    Storage.log("Starting download of EMM dump (sigel: " + sigel + ") with creation time: " + startTime);
                     Storage.clearState(OFFSET_KEY);
                     Storage.writeState(DUMP_ID_KEY, startTime);
                 } else if (!dumpId.equals(startTime)) {

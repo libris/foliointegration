@@ -80,7 +80,7 @@ public class Storage {
         if (transitionIsOk) {
             Storage.writeState(APPLICATION_STATE_KEY, newState.toString());
             String currentDescription = currentState == null ? "[uninitialized]" : currentState.toString();
-            log("Transitioned from state: " + currentDescription + " to " + newState);
+            log("Transitioned from state: " + currentDescription + " to: " + newState);
         }
     }
 

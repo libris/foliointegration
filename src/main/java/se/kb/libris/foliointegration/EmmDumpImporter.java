@@ -19,7 +19,7 @@ public class EmmDumpImporter {
     private final static String OFFSET_KEY = "DumpStateOffset";
     private final static String DUMP_ID_KEY = "DumpStateCreationTime";
 
-    static String emmBaseUrl = "https://libris-dev.kb.se/api/emm/"; // temp
+    static String emmBaseUrl = "https://libris-qa.kb.se/api/emm/"; // temp
     static String sigel = "X"; // temp
     static int maxThreads = 8; // temp
 

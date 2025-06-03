@@ -104,7 +104,9 @@ public class Storage {
             String sql = """
                     CREATE TABLE entities (
                         id INTEGER PRIMARY KEY,
-                        entity TEXT
+                        uri TEXT,
+                        entity TEXT,
+                        UNIQUE(uri) ON CONFLICT IGNORE
                     );
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {

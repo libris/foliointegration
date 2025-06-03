@@ -1,6 +1,11 @@
 package se.kb.libris.foliointegration;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -14,13 +19,14 @@ public class Records {
      * commited within this function. The function is reentrant.
      */
     public static void writeNewRootRecord(List<?> graphList, Connection connection) {
+        Map<String, ?> mainEntity = (Map<String, ?>) graphList.get(1);
         try {
-
             long insertedRowId = 0;
             synchronized (connection) {
                 // Write the entity itself
-                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO entities(entity) VALUES(?)")) {
-                    statement.setString(1, Storage.mapper.writeValueAsString(graphList.get(1)));
+                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO entities(uri, entity) VALUES(?, ?)")) {
+                    statement.setString(1, (String) mainEntity.get("@id"));
+                    statement.setString(2, Storage.mapper.writeValueAsString(mainEntity));
                     statement.execute();
                 }
 
@@ -38,7 +44,7 @@ public class Records {
             }
 
             // Write all URIs that the entity refers to
-            List<String> uris = collectUrisReferencedByThisRecord( graphList.get(1) );
+            List<String> uris = collectUrisReferencedByThisRecord( mainEntity );
             for (String uri : uris) {
                 try (PreparedStatement statement = connection.prepareStatement("INSERT INTO uris(entity_id, uri) VALUES(?, ?)")) {
                     statement.setLong(1, insertedRowId);
@@ -51,6 +57,8 @@ public class Records {
             Storage.log("Could not write record. Fatal. ", e);
             System.exit(1);
         }
+
+        downloadDependencies(mainEntity, connection);
     }
 
     private static List<String> collectUrisReferencedByThisRecord(Object node) {
@@ -80,21 +88,36 @@ public class Records {
         return result;
     }
 
-    /*private static void embellish(Object node) {
+    private final static List<String> propertiesOfInterest = Arrays.asList("mainEntity", "itemOf", "subject", "agent");
+
+    private static void downloadDependencies(Object node, Connection connection) {
         switch (node) {
             case List l: {
                 for (Object o : l) {
-                    embellish(o);
+                    downloadDependencies(o, connection);
                 }
                 break;
             }
             case Map m: {
                 if (m.containsKey("@id") && m.size() == 1) {
-                    //result.add((String) m.get("@id"));
-
+                    String response = downloadJsonLdWithRetry((String) m.get("@id"));
+                    if (response == null) {
+                        Storage.log("WARNING: Was unable to download a dependency: " + m.get("@id") + " which may now be missing in the synced data.");
+                    } else {
+                        try {
+                            Map dependency = Storage.mapper.readValue(response, Map.class);
+                            if (dependency.containsKey("@graph")) {
+                                writeNewRootRecord((List<?>) dependency.get("@graph"), connection);
+                            }
+                        } catch (IOException ioe) {
+                            Storage.log("Could not handle expected JSON.", ioe);
+                        }
+                    }
                 }
                 for (Object k : m.keySet()) {
-                    embellish(m.get(k));
+                    if (propertiesOfInterest.contains(k)) {
+                        downloadDependencies(m.get(k), connection);
+                    }
                 }
                 break;
             }
@@ -102,6 +125,28 @@ public class Records {
                 break;
             }
         }
-    }*/
+    }
+
+    private static String downloadJsonLdWithRetry(String uri) {
+        for (int i = 0; i < 5; ++i) {
+            try (HttpClient client = HttpClient.newHttpClient()) {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(new URI(uri))
+                        .header("accept", "application/json+ld")
+                        .GET()
+                        .build();
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                return response.body();
+            } catch (IOException | URISyntaxException | InterruptedException e) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e2) {
+                    // ignore
+                }
+            }
+        }
+
+        return null;
+    }
 
 }

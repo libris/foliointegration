@@ -5,6 +5,7 @@ import org.eclipse.jetty.ee8.servlet.ServletHolder;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.util.thread.ExecutorThreadPool;
 
+import java.sql.Connection;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 
@@ -50,27 +51,32 @@ public class Server {
 
         // Set the initial state if needed
         {
-            Storage.APPLICATION_STATE state = Storage.getApplicationState();
+            Connection connection = Storage.getConnection();
+            Storage.APPLICATION_STATE state = Storage.getApplicationState(connection);
             if (state == null) {
                 Storage.log("No previous state detected.");
-                Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_FROM_LIBRIS);
+                Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_FROM_LIBRIS, connection);
             } else {
                 Storage.log("Application starting in state: " + state);
             }
+            connection.commit();
         }
 
         server.start();
 
         // The main loop
         while (true) {
-            Storage.APPLICATION_STATE state = Storage.getApplicationState();
+            Connection connection = Storage.getConnection();
+            Storage.APPLICATION_STATE state = Storage.getApplicationState(connection);
+
             switch (state) {
                 case INITIAL_LOAD_FROM_LIBRIS:
-                    new EmmDumpImporter().run();
+                    EmmDumpImporter.run();
                     break;
                 case INITIAL_LOAD_TO_FOLIO:
                     // TEMP! ACTUALLY SYNC TO FOLIO EVENTUALLY!
-                    Storage.transitionToApplicationState(Storage.APPLICATION_STATE.STAYING_IN_SYNC);
+                    Storage.transitionToApplicationState(Storage.APPLICATION_STATE.STAYING_IN_SYNC, connection);
+                    connection.commit();
                     break;
                 case STAYING_IN_SYNC:
 

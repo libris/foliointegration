@@ -58,13 +58,13 @@ public class Storage {
         }
     }
 
-    public static synchronized void transitionToApplicationState(APPLICATION_STATE newState) {
+    public static synchronized void transitionToApplicationState(APPLICATION_STATE newState, Connection connection) {
         // The possible/allowed state transitions for this application are:
         // [null] -> "initial loading from libris"
         // "initial loading from libris" -> "initial loading of folio"
         // "initial loading of folio" -> "staying in sync"
 
-        APPLICATION_STATE currentState = getApplicationState();
+        APPLICATION_STATE currentState = getApplicationState(connection);
 
         boolean transitionIsOk = false;
         if (currentState == null && newState == APPLICATION_STATE.INITIAL_LOAD_FROM_LIBRIS) {
@@ -78,14 +78,14 @@ public class Storage {
         }
 
         if (transitionIsOk) {
-            Storage.writeState(APPLICATION_STATE_KEY, newState.toString());
+            Storage.writeState(APPLICATION_STATE_KEY, newState.toString(), connection);
             String currentDescription = currentState == null ? "[uninitialized]" : currentState.toString();
             log("Transitioned from state: " + currentDescription + " to: " + newState);
         }
     }
 
-    public static APPLICATION_STATE getApplicationState() {
-        String stateString = getState(APPLICATION_STATE_KEY);
+    public static APPLICATION_STATE getApplicationState(Connection connection) {
+        String stateString = getState(APPLICATION_STATE_KEY, connection);
         if (stateString == null)
             return null;
 
@@ -188,8 +188,7 @@ public class Storage {
         return null; // can't happen
     }
 
-    public static synchronized void writeState(String key, String value) {
-        Connection connection = getConnection();
+    public static synchronized void writeState(String key, String value, Connection connection) {
         String sql = """
                     INSERT INTO state (key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value;
                     """.stripIndent();
@@ -197,37 +196,32 @@ public class Storage {
             statement.setString(1, key);
             statement.setString(2, value);
             statement.execute();
-            connection.commit();
         } catch (SQLException e) {
             log("Could not write state (unrecoverable).", e);
             System.exit(1);
         }
     }
 
-    public static synchronized void clearState(String key) {
-        Connection connection = getConnection();
+    public static synchronized void clearState(String key, Connection connection) {
         String sql = """
                     DELETE FROM state WHERE KEY = ?;
                     """.stripIndent();
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, key);
             statement.execute();
-            connection.commit();
         } catch (SQLException e) {
             log("Could not clear state (unrecoverable).", e);
             System.exit(1);
         }
     }
 
-    public static synchronized String getState(String key) {
-        Connection connection = getConnection();
+    public static synchronized String getState(String key, Connection connection) {
         String sql = """
                     SELECT value FROM state WHERE key = ?;
                     """.stripIndent();
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, key);
             statement.execute();
-            connection.commit();
             try(ResultSet resultSet = statement.getResultSet()) {
                 if (resultSet.next()) {
                     return resultSet.getString(1);

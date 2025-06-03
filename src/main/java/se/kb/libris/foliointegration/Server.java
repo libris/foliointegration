@@ -5,6 +5,8 @@ import org.eclipse.jetty.ee8.servlet.ServletHolder;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.util.thread.ExecutorThreadPool;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -50,8 +52,11 @@ public class Server {
         context.addServlet(holder, "/");
 
         // Set the initial state if needed
-        {
-            Connection connection = Storage.getConnection();
+        try (Connection connection = Storage.getConnection()) {
+            if ( Files.exists(Path.of(Storage.dbPath)) ) {
+                Storage.initDb(connection);
+            }
+
             Storage.APPLICATION_STATE state = Storage.getApplicationState(connection);
             if (state == null) {
                 Storage.log("No previous state detected.");
@@ -66,8 +71,10 @@ public class Server {
 
         // The main loop
         while (true) {
-            Connection connection = Storage.getConnection();
-            Storage.APPLICATION_STATE state = Storage.getApplicationState(connection);
+            Storage.APPLICATION_STATE state;
+            try (Connection connection = Storage.getConnection()) {
+                state = Storage.getApplicationState(connection);
+            }
 
             switch (state) {
                 case INITIAL_LOAD_FROM_LIBRIS:
@@ -75,9 +82,11 @@ public class Server {
                     break;
                 case INITIAL_LOAD_TO_FOLIO:
                     // TEMP! ACTUALLY SYNC TO FOLIO EVENTUALLY!
-                    Storage.transitionToApplicationState(Storage.APPLICATION_STATE.STAYING_IN_SYNC, connection);
-                    connection.commit();
-                    break;
+                    try (Connection connection = Storage.getConnection()) {
+                        Storage.transitionToApplicationState(Storage.APPLICATION_STATE.STAYING_IN_SYNC, connection);
+                        connection.commit();
+                        break;
+                    }
                 case STAYING_IN_SYNC:
 
                     break;

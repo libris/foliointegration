@@ -24,13 +24,14 @@ public class EmmDumpImporter {
     final static ConcurrentHashMap<String, Map<String, ?>> prefetchedPages = new ConcurrentHashMap<>();
     static String sigel;
 
-    public static void run() throws Exception{
-        Connection connection = Storage.getConnection();
-        sigel = Storage.getState(DUMP_SIGEL_KEY, connection);
-        if (sigel == null) {
-            sigel = System.getenv("SIGEL").split(",")[0];
-            Storage.writeState(DUMP_SIGEL_KEY, sigel, connection);
-            connection.commit();
+    public static void run() throws Exception {
+        try (Connection connection = Storage.getConnection()) {
+            sigel = Storage.getState(DUMP_SIGEL_KEY, connection);
+            if (sigel == null) {
+                sigel = System.getenv("SIGEL").split(",")[0];
+                Storage.writeState(DUMP_SIGEL_KEY, sigel, connection);
+                connection.commit();
+            }
         }
 
         startIfNotStarted();
@@ -38,14 +39,16 @@ public class EmmDumpImporter {
         String offset;
         String dumpId;
         // Set initial offset if needed
-        offset = Storage.getState(OFFSET_KEY, connection);
-        if (offset == null) {
-            Storage.writeState(OFFSET_KEY, "" + 1, connection); // 1 to skip initial context bs.
-        }
+        try (Connection connection = Storage.getConnection()) {
+            offset = Storage.getState(OFFSET_KEY, connection);
+            if (offset == null) {
+                Storage.writeState(OFFSET_KEY, "" + 1, connection); // 1 to skip initial context bs.
+            }
 
-        offset = Storage.getState(OFFSET_KEY, connection);
-        dumpId = Storage.getState(DUMP_ID_KEY, connection);
-        connection.commit();
+            offset = Storage.getState(OFFSET_KEY, connection);
+            dumpId = Storage.getState(DUMP_ID_KEY, connection);
+            connection.commit();
+        }
 
         try {
             URI uri = new URI(System.getenv("EMMBASEURL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
@@ -72,8 +75,8 @@ public class EmmDumpImporter {
                     for (Object item : items) {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         if (itemMap.containsKey("@graph")) {
-                            // We just want the graph list, not the other attached stuff
-                            Thread t = Thread.startVirtualThread(() -> Records.writeNewRootRecord((List<?>) itemMap.get("@graph"), connection));
+
+                            Thread t = Thread.startVirtualThread(() -> Records.writeNewRootRecord((List<?>) itemMap.get("@graph"), threadConnection));
                             threads.add(t);
                         }
                     }

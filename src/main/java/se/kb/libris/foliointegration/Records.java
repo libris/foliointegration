@@ -22,24 +22,23 @@ public class Records {
         Map<String, ?> mainEntity = (Map<String, ?>) graphList.get(1);
         try {
             long insertedRowId = 0;
-            synchronized (connection) {
-                // Write the entity itself
-                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO entities(uri, entity) VALUES(?, ?)")) {
-                    statement.setString(1, (String) mainEntity.get("@id"));
-                    statement.setString(2, Storage.mapper.writeValueAsString(mainEntity));
-                    statement.execute();
-                }
 
-                // Get the ROWID of the written entity
-                try (PreparedStatement statement = connection.prepareStatement("SELECT last_insert_rowid()")) {
-                    statement.execute();
-                    try (ResultSet resultSet = statement.getResultSet()) {
-                        if (!resultSet.next()) {
-                            Storage.logWithCallstack("SQLITE last_insert_rowid() failure. Fatal.");
-                            System.exit(1);
-                        }
-                        insertedRowId = resultSet.getLong(1);
+            // Write the entity itself
+            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO entities(uri, entity) VALUES(?, ?)")) {
+                statement.setString(1, (String) mainEntity.get("@id"));
+                statement.setString(2, Storage.mapper.writeValueAsString(mainEntity));
+                statement.execute();
+            }
+
+            // Get the ROWID of the written entity
+            try (PreparedStatement statement = connection.prepareStatement("SELECT last_insert_rowid()")) {
+                statement.execute();
+                try (ResultSet resultSet = statement.getResultSet()) {
+                    if (!resultSet.next()) {
+                        Storage.logWithCallstack("SQLITE last_insert_rowid() failure. Fatal.");
+                        System.exit(1);
                     }
+                    insertedRowId = resultSet.getLong(1);
                 }
             }
 

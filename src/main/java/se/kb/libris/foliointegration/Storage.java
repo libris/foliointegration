@@ -31,7 +31,11 @@ public class Storage {
 
     private static final String APPLICATION_STATE_KEY = "ApplicationState";
 
-    private static Connection _connection = null;
+    public static String dbPath = "/data/libris.sqlite3"; // default, and typically in use when running in container
+    static {
+        if (System.getProperty("DBPATH") != null)
+            dbPath = System.getProperty("DBPATH"); // For native running, allow this to be set (typically: -DDBPATH=/tmp/libris.sqlite3)
+    }
 
     public static void log(String message) {
         synchronized (System.err) {
@@ -99,7 +103,7 @@ public class Storage {
         return null;
     }
 
-    private static synchronized void initDb(Connection connection) throws SQLException {
+    public static synchronized void initDb(Connection connection) throws SQLException {
         {
             String sql = """
                     CREATE TABLE entities (
@@ -157,30 +161,17 @@ public class Storage {
         }
     }
 
-    public static synchronized Connection getConnection() {
-        if (_connection != null)
-            return _connection;
-
-        String dbPath = "/data/libris.sqlite3"; // default, and typically in use when running in container
-        if (System.getProperty("DBPATH") != null)
-            dbPath = System.getProperty("DBPATH"); // For native running, allow this to be set (typically: -DDBPATH=/tmp)
-
-        boolean preExistingState = Files.exists(Path.of(dbPath));
-
+    // Singular connection, may only ever used on the main thread.
+    public static Connection getConnection() {
         var url = "jdbc:sqlite:" + dbPath;
         try {
             SQLiteConfig config = new SQLiteConfig();
             config.setJournalMode(SQLiteConfig.JournalMode.WAL);
             config.setSynchronous(SQLiteConfig.SynchronousMode.OFF);
             config.setPragma(SQLiteConfig.Pragma.FOREIGN_KEYS, "ON");
-            _connection = DriverManager.getConnection(url);
-
-            if (!preExistingState) {
-                initDb(_connection);
-            }
-
-            _connection.setAutoCommit(false);
-            return _connection;
+            Connection connection = DriverManager.getConnection(url);
+            connection.setAutoCommit(false);
+            return connection;
         } catch (Exception e) {
             log("Did you forget to mount the /data volume? SQLITE3 failure (unrecoverable).", e);
             System.exit(1);

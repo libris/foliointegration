@@ -16,15 +16,15 @@ public class Records {
     public static void writeNewRootRecord(List<?> graphList, Connection connection) {
         try {
 
+            long insertedRowId = 0;
             synchronized (connection) {
                 // Write the entity itself
                 try (PreparedStatement statement = connection.prepareStatement("INSERT INTO entities(entity) VALUES(?)")) {
-                    statement.setString(1, Storage.mapper.writeValueAsString( graphList.get(1) ));
+                    statement.setString(1, Storage.mapper.writeValueAsString(graphList.get(1)));
                     statement.execute();
                 }
 
                 // Get the ROWID of the written entity
-                long insertedRowId = 0;
                 try (PreparedStatement statement = connection.prepareStatement("SELECT last_insert_rowid()")) {
                     statement.execute();
                     try (ResultSet resultSet = statement.getResultSet()) {
@@ -35,18 +35,18 @@ public class Records {
                         insertedRowId = resultSet.getLong(1);
                     }
                 }
-
-                // Write all URIs that the entity refers to
-                List<String> uris = collectUrisReferencedByThisRecord( graphList.get(1) );
-                for (String uri : uris) {
-                    try (PreparedStatement statement = connection.prepareStatement("INSERT INTO uris(entity_id, uri) VALUES(?, ?)")) {
-                        statement.setLong(1, insertedRowId);
-                        statement.setString(2, uri);
-                        statement.execute();
-                    }
-                }
-                
             }
+
+            // Write all URIs that the entity refers to
+            List<String> uris = collectUrisReferencedByThisRecord( graphList.get(1) );
+            for (String uri : uris) {
+                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO uris(entity_id, uri) VALUES(?, ?)")) {
+                    statement.setLong(1, insertedRowId);
+                    statement.setString(2, uri);
+                    statement.execute();
+                }
+            }
+
         } catch (SQLException | IOException e) {
             Storage.log("Could not write record. Fatal. ", e);
             System.exit(1);
@@ -79,4 +79,29 @@ public class Records {
 
         return result;
     }
+
+    /*private static void embellish(Object node) {
+        switch (node) {
+            case List l: {
+                for (Object o : l) {
+                    embellish(o);
+                }
+                break;
+            }
+            case Map m: {
+                if (m.containsKey("@id") && m.size() == 1) {
+                    //result.add((String) m.get("@id"));
+
+                }
+                for (Object k : m.keySet()) {
+                    embellish(m.get(k));
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }*/
+
 }

@@ -79,7 +79,7 @@ public class Server {
                     connection.commit();
                     break;
                 case STAYING_IN_SYNC:
-
+                    EmmSync.run();
                     break;
             }
         }

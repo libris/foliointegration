@@ -7,10 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -122,12 +119,12 @@ public class EmmDumpImporter {
             ZonedDateTime dumpCreationTime = ZonedDateTime.parse( Storage.getState(DUMP_ID_KEY, connection) );
             long candidateUntil = dumpCreationTime.toInstant().toEpochMilli();
             long preExistingUntil = 33305941930000L; // assumption, *far* future. (Instant.MAX overflows unfortunately)
-            String preExistingUntilString = Storage.getState(EmmSync.SYNCED_UTIL_KEY, connection);
+            String preExistingUntilString = Storage.getState(EmmSync.SYNCED_UNTIL_KEY, connection);
             if (preExistingUntilString != null) {
                 preExistingUntil = Long.parseLong(preExistingUntilString);
             }
             if (candidateUntil < preExistingUntil) {
-                Storage.writeState(EmmSync.SYNCED_UTIL_KEY, ""+candidateUntil, connection);
+                Storage.writeState(EmmSync.SYNCED_UNTIL_KEY, ""+candidateUntil, connection);
                 Storage.log("Sync-from time is now set to: " + candidateUntil + " (" + dumpCreationTime + ")");
             }
 

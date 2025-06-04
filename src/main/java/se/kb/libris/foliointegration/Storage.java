@@ -157,6 +157,10 @@ public class Storage {
         }
     }
 
+    /**
+     * Get the singular connection object. Issue DB writes only on the main thread, as concurrency in sqlite
+     * is tricky and doubly so on top of "esoteric" storage solutions that may or may not respect locking.
+     */
     public static synchronized Connection getConnection() {
         if (_connection != null)
             return _connection;

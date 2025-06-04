@@ -68,13 +68,32 @@ public class EmmDumpImporter {
                     List<?> items = (List<?>) responseMap.get("items");
                     offset = "" + (Integer.parseInt(offset) + items.size());
 
+                    // Do dependency downloads (not writes!) concurrently
+                    var dependencies = Collections.synchronizedList(new ArrayList<List<?>>());
+                    var threads = new ArrayList<Thread>(100);
+                    for (Object item : items) {
+                        Map<String, Object> itemMap = (Map<String, Object>) item;
+                        List<?> graphList = (List<?>) itemMap.get("@graph");
+
+                        Thread t = Thread.startVirtualThread(() -> dependencies.addAll(Records.downloadDependencies(graphList.get(1))));
+                        threads.add(t);
+                    }
+                    for (Thread t : threads) {
+                        t.join();
+                    }
+
+                    // Write record and dependencies
                     for (Object item : items) {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         if (itemMap.containsKey("@graph")) {
-                            // We just want the graph list, not the other attached stuff
-                            Records.writeNewRootRecord((List<?>) itemMap.get("@graph"), connection);
+                            List<?> graphList = (List<?>) itemMap.get("@graph");
+                            Records.writeNewRecord(graphList, connection);
                         }
                     }
+                    for (List<?> graphList : dependencies) {
+                        Records.writeNewRecord(graphList, connection);
+                    }
+
                     String sql = "UPDATE state SET value = ? WHERE key = ?;";
                     try (PreparedStatement statement = connection.prepareStatement(sql)) {
                         statement.setString(1, offset);
@@ -136,15 +155,13 @@ public class EmmDumpImporter {
                     statement.setString(2, DUMP_SIGEL_KEY);
                     statement.execute();
                 }
-
-                connection.commit();
-
             } else {
                 Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_TO_FOLIO, connection);
             }
             connection.commit();
         } catch (SQLException e) {
-            Storage.log("Dump finalization failed.", e);
+            Storage.log("Dump finalization failed. Fatal.", e);
+            System.exit(1);
         }
     }
 

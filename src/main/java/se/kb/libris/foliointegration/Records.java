@@ -16,9 +16,9 @@ public class Records {
 
     /**
      * Import a fetched root record (a kbv Item). The connection will be written to, but not
-     * commited within this function. The function is reentrant.
+     * commited within this function.
      */
-    public static void writeNewRootRecord(List<?> graphList, Connection connection) {
+    public static void writeNewRecord(List<?> graphList, Connection connection) {
         Map<String, ?> mainEntity = (Map<String, ?>) graphList.get(1);
         try {
             long insertedRowId = 0;
@@ -55,8 +55,6 @@ public class Records {
             Storage.log("Could not write record. Fatal. ", e);
             System.exit(1);
         }
-
-        downloadDependencies(mainEntity, connection);
     }
 
     private static List<String> collectUrisReferencedByThisRecord(Object node) {
@@ -88,11 +86,13 @@ public class Records {
 
     private final static List<String> propertiesOfInterest = Arrays.asList("mainEntity", "itemOf", "subject", "agent");
 
-    private static void downloadDependencies(Object node, Connection connection) {
+    public static List<List<?>> downloadDependencies(Object node) {
+        var result = new ArrayList<List<?>>();
+
         switch (node) {
             case List l: {
                 for (Object o : l) {
-                    downloadDependencies(o, connection);
+                    result.addAll( downloadDependencies(o) );
                 }
                 break;
             }
@@ -105,7 +105,8 @@ public class Records {
                         try {
                             Map dependency = Storage.mapper.readValue(response, Map.class);
                             if (dependency.containsKey("@graph")) {
-                                writeNewRootRecord((List<?>) dependency.get("@graph"), connection);
+                                //writeNewRootRecord((List<?>) dependency.get("@graph"), connection);
+                                result.add((List<?>) dependency.get("@graph"));
                             }
                         } catch (IOException ioe) {
                             Storage.log("Could not handle expected JSON.", ioe);
@@ -114,7 +115,7 @@ public class Records {
                 }
                 for (Object k : m.keySet()) {
                     if (propertiesOfInterest.contains(k)) {
-                        downloadDependencies(m.get(k), connection);
+                        result.addAll( downloadDependencies(m.get(k)) );
                     }
                 }
                 break;
@@ -123,6 +124,8 @@ public class Records {
                 break;
             }
         }
+
+        return result;
     }
 
     private static String downloadJsonLdWithRetry(String uri) {

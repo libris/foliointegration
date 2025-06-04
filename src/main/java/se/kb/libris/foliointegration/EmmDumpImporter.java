@@ -143,7 +143,7 @@ public class EmmDumpImporter {
                     break;
                 }
             }
-            if (currentSigelIndex < sigelList.length - 1) { 
+            if (currentSigelIndex < sigelList.length - 1) {
                 sigel = sigelList[currentSigelIndex + 1];
 
                 Storage.writeState(DUMP_SIGEL_KEY, sigel, connection);

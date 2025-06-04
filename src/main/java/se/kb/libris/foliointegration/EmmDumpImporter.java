@@ -9,6 +9,8 @@ import java.net.http.HttpResponse;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -94,12 +96,7 @@ public class EmmDumpImporter {
                         Records.writeNewRecord(graphList, connection);
                     }
 
-                    String sql = "UPDATE state SET value = ? WHERE key = ?;";
-                    try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                        statement.setString(1, offset);
-                        statement.setString(2, OFFSET_KEY);
-                        statement.execute();
-                    }
+                    Storage.writeState(OFFSET_KEY, offset, connection);
 
                     connection.commit(); // The record writes AND our new consumed offset together
 
@@ -118,26 +115,26 @@ public class EmmDumpImporter {
     private static void finalizeDumpDownload() {
         Storage.log("EMM dump download complete, for sigel: " + sigel);
 
-        // If there are more dumps to download, set starting conditions for the next one.
         try {
             Connection connection = Storage.getConnection();
+
+            // Set initial time for sync catch-up
+            ZonedDateTime dumpCreationTime = ZonedDateTime.parse( Storage.getState(DUMP_ID_KEY, connection) );
+            long candidateUntil = dumpCreationTime.toInstant().toEpochMilli();
+            long preExistingUntil = 33305941930000L; // assumption, *far* future. (Instant.MAX overflows unfortunately)
+            String preExistingUntilString = Storage.getState(EmmSync.SYNCED_UTIL_KEY, connection);
+            if (preExistingUntilString != null) {
+                preExistingUntil = Long.parseLong(preExistingUntilString);
+            }
+            if (candidateUntil < preExistingUntil) {
+                Storage.writeState(EmmSync.SYNCED_UTIL_KEY, ""+candidateUntil, connection);
+                Storage.log("Sync-from time is now set to: " + candidateUntil + " (" + dumpCreationTime + ")");
+            }
 
             Storage.clearState(OFFSET_KEY, connection);
             Storage.clearState(DUMP_ID_KEY, connection);
 
-            // Clear the dump download state
-            {
-                String sql = "DELETE FROM state WHERE key = ?;";
-                try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                    statement.setString(1, OFFSET_KEY);
-                    statement.execute();
-                }
-                try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                    statement.setString(1, DUMP_ID_KEY);
-                    statement.execute();
-                }
-            }
-
+            // If there are more dumps to download, set starting conditions for the next one.
             String[] sigelList = System.getenv("SIGEL").split(",");
             int currentSigelIndex = 0;
             for (int i = 0; i < sigelList.length; ++i) {
@@ -146,18 +143,14 @@ public class EmmDumpImporter {
                     break;
                 }
             }
-            if (currentSigelIndex < sigelList.length - 1) {
+            if (currentSigelIndex < sigelList.length - 1) { 
                 sigel = sigelList[currentSigelIndex + 1];
 
-                String sql = "UPDATE state SET value = ? WHERE key = ?;";
-                try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                    statement.setString(1, sigel);
-                    statement.setString(2, DUMP_SIGEL_KEY);
-                    statement.execute();
-                }
+                Storage.writeState(DUMP_SIGEL_KEY, sigel, connection);
             } else {
                 Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_TO_FOLIO, connection);
             }
+
             connection.commit();
         } catch (SQLException e) {
             Storage.log("Dump finalization failed. Fatal.", e);

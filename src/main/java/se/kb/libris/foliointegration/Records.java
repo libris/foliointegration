@@ -17,8 +17,7 @@ public class Records {
      * Import a fetched record. The connection will be written to, but not
      * commited within this function.
      */
-    public static void writeRecord(List<?> graphList, Connection connection) {
-        Map<String, ?> mainEntity = (Map<String, ?>) graphList.get(1);
+    public static void writeRecord(Map<String, ?> mainEntity, Connection connection) {
         try {
             long insertedRowId = 0;
             // Write the entity itself
@@ -91,8 +90,8 @@ public class Records {
 
     private final static List<String> propertiesOfInterest = Arrays.asList("mainEntity", "itemOf", "subject", "agent");
 
-    public static List<List<?>> downloadDependencies(Object node) {
-        var result = new ArrayList<List<?>>();
+    public static List<Map> downloadDependencies(Object node) {
+        var result = new ArrayList<Map>();
 
         switch (node) {
             case List l: {
@@ -110,8 +109,8 @@ public class Records {
                         try {
                             Map dependency = Storage.mapper.readValue(response, Map.class);
                             if (dependency.containsKey("@graph")) {
-                                //writeNewRootRecord((List<?>) dependency.get("@graph"), connection);
-                                result.add((List<?>) dependency.get("@graph"));
+                                List<Map> graphList = (List<Map>) dependency.get("@graph");
+                                result.add(graphList.get(1));
                             }
                         } catch (IOException ioe) {
                             Storage.log("Could not handle expected JSON.", ioe);

@@ -68,7 +68,7 @@ public class EmmDumpImport {
                     offset = "" + (Integer.parseInt(offset) + items.size());
 
                     // Do dependency downloads (not writes!) concurrently
-                    var dependencies = Collections.synchronizedList(new ArrayList<List<?>>());
+                    var dependencies = Collections.synchronizedList(new ArrayList<Map>());
                     var threads = new ArrayList<Thread>(100);
                     for (Object item : items) {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
@@ -85,12 +85,24 @@ public class EmmDumpImport {
                     for (Object item : items) {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         if (itemMap.containsKey("@graph")) {
-                            List<?> graphList = (List<?>) itemMap.get("@graph");
-                            Records.writeRecord(graphList, connection);
+                            List<Map<String,?>> graphList = (List<Map<String,?>>) itemMap.get("@graph");
+
+                            // We take dumps in the "itemAndInstance" category, which means we get holding records
+                            // with embedded instances. We don't want them embedded, we want them separate. So separate
+                            // them into two distinct records again before writing (one Item-record and one Instance-record).
+                            Map mainEntity = graphList.get(1);
+                            Map itemOf = (Map) mainEntity.get("itemOf");
+                            String instanceUri = (String) itemOf.get("@id");
+                            mainEntity.put("itemOf", instanceUri);
+
+                            //Map<String, ?> mainEntity = (Map<String, ?>) graphList.get(1);
+
+                            Records.writeRecord(mainEntity, connection);
+                            Records.writeRecord(itemOf, connection);
                         }
                     }
-                    for (List<?> graphList : dependencies) {
-                        Records.writeRecord(graphList, connection);
+                    for (Map dependency : dependencies) {
+                        Records.writeRecord(dependency, connection);
                     }
 
                     Storage.writeState(OFFSET_KEY, offset, connection);

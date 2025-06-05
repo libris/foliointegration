@@ -71,7 +71,7 @@ public class Server {
 
             switch (state) {
                 case INITIAL_LOAD_FROM_LIBRIS:
-                    EmmDumpImporter.run();
+                    EmmDumpImport.run();
                     break;
                 case INITIAL_LOAD_TO_FOLIO:
                     // TEMP! ACTUALLY SYNC TO FOLIO EVENTUALLY!

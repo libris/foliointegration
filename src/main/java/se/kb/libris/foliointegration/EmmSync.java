@@ -7,6 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -32,10 +33,15 @@ public class EmmSync {
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
                 Map responseMap = Storage.mapper.readValue(response.body(), Map.class);
 
-                List<?> items = (List<?>) responseMap.get("orderedItems");
-                // DO UPDATES HERE
+                List<Map<String,?>> items = (List<Map<String,?>>) responseMap.get("orderedItems");
+                for (Map<String, ?> item : items) {
+                    long modified = ZonedDateTime.parse((String) item.get("published")).toInstant().toEpochMilli();
+                    if (modified > syncedUntil) {
+                        handleEmmActivity(item, connection);
+                    }
+                }
 
-                Map<String, ?> last = (Map<String, ?>) items.getLast();
+                Map<String, ?> last = items.getLast();
                 long earliestTimeOnPage = ZonedDateTime.parse((String) last.get("published")).toInstant().toEpochMilli();
                 if (earliestTimeOnPage < syncedUntil) {
                     Storage.writeState(SYNCED_UNTIL_KEY, "" + newUntilTarget, connection);
@@ -48,7 +54,33 @@ public class EmmSync {
             }
         } catch (URISyntaxException | IOException | InterruptedException | SQLException e) {
             Storage.log("Sync iteration failed.", e);
+            try {
+                connection.rollback();
+            } catch (SQLException se) {
+                Storage.log("Iteration update rollback failed. Fatal.", se);
+                System.exit(1);
+            }
         }
 
+    }
+
+    private static void handleEmmActivity(Map<String, ?> activity, Connection connection) throws SQLException {
+        Map<String,?> activityObject = (Map<String,?>) activity.get("object");
+
+        switch ( (String)activity.get("type") ) {
+            case "Create": {
+                break;
+            }
+            case "Update":
+                break;
+            case "Delete": {
+                try (PreparedStatement statement = connection.prepareStatement("DELETE FROM uris WHERE URI = ?")) {
+                    statement.setString(1, (String) activityObject.get("id"));
+                    statement.execute();
+                }
+                break;
+            }
+        }
+        //Records.writeRecord();
     }
 }

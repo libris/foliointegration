@@ -13,7 +13,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 
-public class EmmDumpImporter {
+public class EmmDumpImport {
 
     private final static String OFFSET_KEY = "DumpStateOffset";
     private final static String DUMP_ID_KEY = "DumpStateCreationTime";
@@ -86,11 +86,11 @@ public class EmmDumpImporter {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         if (itemMap.containsKey("@graph")) {
                             List<?> graphList = (List<?>) itemMap.get("@graph");
-                            Records.writeNewRecord(graphList, connection);
+                            Records.writeRecord(graphList, connection);
                         }
                     }
                     for (List<?> graphList : dependencies) {
-                        Records.writeNewRecord(graphList, connection);
+                        Records.writeRecord(graphList, connection);
                     }
 
                     Storage.writeState(OFFSET_KEY, offset, connection);

@@ -13,17 +13,16 @@ import java.sql.SQLException;
 import java.util.*;
 
 public class Records {
-
     /**
-     * Import a fetched root record (a kbv Item). The connection will be written to, but not
+     * Import a fetched record. The connection will be written to, but not
      * commited within this function.
      */
-    public static void writeNewRecord(List<?> graphList, Connection connection) {
+    public static void writeRecord(List<?> graphList, Connection connection) {
         Map<String, ?> mainEntity = (Map<String, ?>) graphList.get(1);
         try {
             long insertedRowId = 0;
             // Write the entity itself
-            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO entities(uri, entity) VALUES(?, ?)")) {
+            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO entities(uri, entity) VALUES(?, ?) ON CONFLICT(uri) DO UPDATE SET entity=excluded.entity")) {
                 statement.setString(1, (String) mainEntity.get("@id"));
                 statement.setString(2, Storage.mapper.writeValueAsString(mainEntity));
                 statement.execute();
@@ -39,6 +38,12 @@ public class Records {
                     }
                     insertedRowId = resultSet.getLong(1);
                 }
+            }
+
+            // Clear any existing URIs for this record
+            try (PreparedStatement statement = connection.prepareStatement("DELETE FROM uris WHERE entity_id = ?")) {
+                statement.setLong(1, insertedRowId);
+                statement.execute();
             }
 
             // Write all URIs that the entity refers to

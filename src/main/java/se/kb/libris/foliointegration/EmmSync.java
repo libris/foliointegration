@@ -82,10 +82,14 @@ public class EmmSync {
                     String libraryCode = heldBy.substring(heldBy.lastIndexOf('/') + 1);
                     if (SIGEL_LIST.contains(libraryCode)) {
                         String response = Records.downloadJsonLdWithRetry((String) activityObject.get("id"));
-                        Map dependency = Storage.mapper.readValue(response, Map.class);
-                        if (dependency.containsKey("@graph")) {
-                            List<Map> graphList = (List<Map>) dependency.get("@graph");
+                        Map record = Storage.mapper.readValue(response, Map.class);
+                        if (record.containsKey("@graph")) {
+                            List<Map> graphList = (List<Map>) record.get("@graph");
+                            List<Map> dependencies = Records.downloadDependencies(graphList.get(1));
                             Records.writeRecord(graphList.get(1), connection);
+                            for (Map dependency : dependencies) {
+                                Records.writeRecord(dependency, connection);
+                            }
                             System.err.println("Create of " + libraryCode + " -> " + activityObject.get("id"));
                         }
                     }

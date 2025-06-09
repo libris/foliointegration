@@ -85,7 +85,10 @@ public class EmmSync {
                         Map record = Storage.mapper.readValue(response, Map.class);
                         if (record.containsKey("@graph")) {
                             List<Map> graphList = (List<Map>) record.get("@graph");
-                            List<Map> dependencies = Records.downloadDependencies(graphList.get(1));
+
+                            List<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
+                            Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
+                            List<Map> dependencies = Records.downloadDependencies(dependenciesToDownload);
                             Records.writeRecord(graphList.get(1), connection);
                             for (Map dependency : dependencies) {
                                 Records.writeRecord(dependency, connection);
@@ -120,6 +123,7 @@ public class EmmSync {
                     statement.setString(1, (String) activityObject.get("id"));
                     statement.execute();
                 }
+                System.err.println("Delete of -> " + activityObject.get("id"));
                 break;
             }
         }

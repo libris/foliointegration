@@ -7,6 +7,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.ZonedDateTime;
 import java.util.*;
@@ -74,7 +76,9 @@ public class EmmDumpImport {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         List<?> graphList = (List<?>) itemMap.get("@graph");
 
-                        Thread t = Thread.startVirtualThread(() -> dependencies.addAll(Records.downloadDependencies(graphList.get(1))));
+                        List<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
+                        Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
+                        Thread t = Thread.startVirtualThread(() -> dependencies.addAll(Records.downloadDependencies(dependenciesToDownload)));
                         threads.add(t);
                     }
                     for (Thread t : threads) {

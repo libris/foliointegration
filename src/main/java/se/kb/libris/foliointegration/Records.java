@@ -13,6 +13,8 @@ import java.sql.SQLException;
 import java.util.*;
 
 public class Records {
+    private final static List<String> propertiesOfInterest = Arrays.asList("mainEntity", "itemOf", "subject", "agent");
+
     /**
      * Import a fetched record. The connection will be written to, but not
      * commited within this function.
@@ -61,7 +63,7 @@ public class Records {
         }
     }
 
-    private static List<String> collectUrisReferencedByThisRecord(Object node) {
+    public static List<String> collectUrisReferencedByThisRecord(Object node) {
         var result = new ArrayList<String>();
 
         switch (node) {
@@ -76,7 +78,9 @@ public class Records {
                     result.add((String) m.get("@id"));
                 }
                 for (Object k : m.keySet()) {
-                    result.addAll( collectUrisReferencedByThisRecord(m.get(k)) );
+                    if (propertiesOfInterest.contains(k)) {
+                        result.addAll( collectUrisReferencedByThisRecord(m.get(k)) );
+                    }
                 }
                 break;
             }
@@ -88,44 +92,39 @@ public class Records {
         return result;
     }
 
-    private final static List<String> propertiesOfInterest = Arrays.asList("mainEntity", "itemOf", "subject", "agent");
+    public static void filterUrisWeAlreadyHave(List<String> uris, Connection connection) throws SQLException {
+        var it = uris.iterator();
+        while (it.hasNext()) {
+            String dependencyToDownload = it.next();
+            try (PreparedStatement statement = connection.prepareStatement("SELECT id FROM uris WHERE URI = ?")) {
+                statement.setString(1, dependencyToDownload);
+                statement.execute();
+                try (ResultSet resultSet = statement.getResultSet()) {
+                    if (resultSet.next()) {
+                        it.remove();
+                    }
+                }
+            }
+        }
+    }
 
-    public static List<Map> downloadDependencies(Object node) {
+    public static List<Map> downloadDependencies(List<String> uris) {
         var result = new ArrayList<Map>();
 
-        switch (node) {
-            case List l: {
-                for (Object o : l) {
-                    result.addAll( downloadDependencies(o) );
-                }
-                break;
-            }
-            case Map m: {
-                if (m.containsKey("@id") && m.size() == 1) {
-                    String response = downloadJsonLdWithRetry((String) m.get("@id"));
-                    if (response == null) {
-                        Storage.log("WARNING: Was unable to download a dependency: " + m.get("@id") + " which may now be missing in the synced data.");
-                    } else {
-                        try {
-                            Map dependency = Storage.mapper.readValue(response, Map.class);
-                            if (dependency.containsKey("@graph")) {
-                                List<Map> graphList = (List<Map>) dependency.get("@graph");
-                                result.add(graphList.get(1));
-                            }
-                        } catch (IOException ioe) {
-                            Storage.log("Could not handle expected JSON.", ioe);
-                        }
+        for (String uri : uris) {
+            String response = downloadJsonLdWithRetry(uri);
+            if (response == null) {
+                Storage.log("WARNING: Was unable to download a dependency: " + uri + " which may now be missing in the synced data.");
+            } else {
+                try {
+                    Map dependency = Storage.mapper.readValue(response, Map.class);
+                    if (dependency.containsKey("@graph")) {
+                        List<Map> graphList = (List<Map>) dependency.get("@graph");
+                        result.add(graphList.get(1));
                     }
+                } catch (IOException ioe) {
+                    Storage.log("Could not handle expected JSON.", ioe);
                 }
-                for (Object k : m.keySet()) {
-                    if (propertiesOfInterest.contains(k)) {
-                        result.addAll( downloadDependencies(m.get(k)) );
-                    }
-                }
-                break;
-            }
-            default: {
-                break;
             }
         }
 

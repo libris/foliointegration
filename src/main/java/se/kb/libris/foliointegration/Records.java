@@ -132,7 +132,7 @@ public class Records {
         return result;
     }
 
-    private static String downloadJsonLdWithRetry(String uri) {
+    public static String downloadJsonLdWithRetry(String uri) {
         for (int i = 0; i < 5; ++i) {
             try (HttpClient client = HttpClient.newHttpClient()) {
                 HttpRequest request = HttpRequest.newBuilder()

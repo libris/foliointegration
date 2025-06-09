@@ -18,7 +18,7 @@ public class Server {
 
         var server = new org.eclipse.jetty.server.Server(pool);
 
-        int port = 8080;
+        int port = 8484;
 
         var httpConfig = new HttpConfiguration();
         httpConfig.setIdleTimeout(5 * 60 * 1000); // more than nginx keepalive_timeout

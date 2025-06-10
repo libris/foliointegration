@@ -107,7 +107,7 @@ public class Storage {
                         uri TEXT,
                         entity TEXT,
                         modified INTEGER,
-                        UNIQUE(uri) ON CONFLICT IGNORE
+                        UNIQUE(uri)
                     );
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -134,6 +134,20 @@ public class Storage {
                             id INTEGER PRIMARY KEY,
                             key TEXT UNIQUE,
                             value TEXT
+                        );
+                    """.stripIndent();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.execute();
+            }
+        }
+        {
+            String sql = """
+                    CREATE TABLE exported_checksum (
+                            id INTEGER PRIMARY KEY,
+                            entity_id INTEGER,
+                            checksum INTEGER,
+                            UNIQUE(entity_id),
+                            FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
                         );
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {

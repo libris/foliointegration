@@ -119,7 +119,7 @@ public class EmmSync {
 
                 break;
             case "Delete": {
-                try (PreparedStatement statement = connection.prepareStatement("DELETE FROM uris WHERE URI = ?")) {
+                try (PreparedStatement statement = connection.prepareStatement("DELETE FROM entities WHERE URI = ?")) {
                     statement.setString(1, (String) activityObject.get("id"));
                     statement.execute();
                 }

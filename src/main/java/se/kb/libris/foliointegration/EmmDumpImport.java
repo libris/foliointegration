@@ -17,9 +17,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EmmDumpImport {
 
-    private final static String OFFSET_KEY = "DumpStateOffset";
-    private final static String DUMP_ID_KEY = "DumpStateCreationTime";
-    private final static String DUMP_SIGEL_KEY = "DumpStateSigel";
+    private final static String OFFSET_KEY = "EMMDumpStateOffset";
+    private final static String DUMP_ID_KEY = "EMMDumpStateCreationTime";
+    private final static String DUMP_SIGEL_KEY = "EMMDumpStateSigel";
     private final static int maxThreads = 8;
 
     final static ConcurrentHashMap<String, Map<String, ?>> prefetchedPages = new ConcurrentHashMap<>();
@@ -161,6 +161,8 @@ public class EmmDumpImport {
 
                 Storage.writeState(DUMP_SIGEL_KEY, sigel, connection);
             } else {
+                Storage.clearState(DUMP_SIGEL_KEY, connection);
+                Storage.writeState(FolioSync.SYNCED_UNTIL_KEY, "0", connection);
                 Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_TO_FOLIO, connection);
             }
 

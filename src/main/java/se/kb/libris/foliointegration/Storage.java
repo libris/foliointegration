@@ -106,6 +106,7 @@ public class Storage {
                         id INTEGER PRIMARY KEY,
                         uri TEXT,
                         entity TEXT,
+                        modified INTEGER,
                         UNIQUE(uri) ON CONFLICT IGNORE
                     );
                     """.stripIndent();
@@ -150,6 +151,14 @@ public class Storage {
         {
             String sql = """
                     CREATE INDEX idx_uris_entity_id ON uris(entity_id);
+                    """.stripIndent();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.execute();
+            }
+        }
+        {
+            String sql = """
+                    CREATE INDEX idx_entities_modified ON entities(modified);
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.execute();

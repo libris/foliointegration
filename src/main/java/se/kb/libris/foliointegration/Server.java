@@ -80,6 +80,7 @@ public class Server {
                     break;
                 case STAYING_IN_SYNC:
                     EmmSync.run();
+                    FolioSync.run();
                     break;
             }
         }

@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 public class EmmSync {
-    public final static String SYNCED_UNTIL_KEY = "SyncStateSyncedUntil";
+    public final static String SYNCED_UNTIL_KEY = "EMMSyncStateSyncedUntil";
 
     private static List<String> SIGEL_LIST = Arrays.asList( System.getenv("SIGEL").split(",") );
 

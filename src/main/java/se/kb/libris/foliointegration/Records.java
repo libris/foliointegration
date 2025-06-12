@@ -13,7 +13,7 @@ import java.sql.SQLException;
 import java.util.*;
 
 public class Records {
-    private final static List<String> propertiesOfInterest = Arrays.asList("mainEntity", "itemOf", "subject", "agent");
+    private final static List<String> propertiesOfInterest = Arrays.asList("mainEntity", "instanceOf", "itemOf", "subject", "agent");
 
     /**
      * Import a fetched record. The connection will be written to, but not
@@ -22,9 +22,10 @@ public class Records {
     public static void writeRecord(Map<String, ?> mainEntity, Connection connection) {
         try {
             long insertedRowId = 0;
+            String mainEntityId = (String) mainEntity.get("@id");
             // Write the entity itself
             try (PreparedStatement statement = connection.prepareStatement("INSERT INTO entities(uri, entity, modified) VALUES(?, ?, ?) ON CONFLICT(uri) DO UPDATE SET entity=excluded.entity, modified=excluded.modified")) {
-                statement.setString(1, (String) mainEntity.get("@id"));
+                statement.setString(1, mainEntityId);
                 statement.setString(2, Storage.mapper.writeValueAsString(mainEntity));
                 statement.setLong(3, new Date().toInstant().toEpochMilli());
                 statement.execute();
@@ -43,18 +44,20 @@ public class Records {
             }
 
             // Clear any existing URIs for this record
-            try (PreparedStatement statement = connection.prepareStatement("DELETE FROM uris WHERE entity_id = ?")) {
+            try (PreparedStatement statement = connection.prepareStatement("DELETE FROM referenced_uris WHERE entity_id = ?")) {
                 statement.setLong(1, insertedRowId);
                 statement.execute();
             }
 
-            // Write all URIs that the entity refers to
+            // Write all URIs that the entity refers to (except itself)
             List<String> uris = collectUrisReferencedByThisRecord( mainEntity );
             for (String uri : uris) {
-                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO uris(entity_id, uri) VALUES(?, ?)")) {
-                    statement.setLong(1, insertedRowId);
-                    statement.setString(2, uri);
-                    statement.execute();
+                if (!uri.equals(mainEntityId)) {
+                    try (PreparedStatement statement = connection.prepareStatement("INSERT INTO referenced_uris(entity_id, referenced_uri) VALUES(?, ?)")) {
+                        statement.setLong(1, insertedRowId);
+                        statement.setString(2, uri);
+                        statement.execute();
+                    }
                 }
             }
 
@@ -75,7 +78,7 @@ public class Records {
                 break;
             }
             case Map m: {
-                if (m.containsKey("@id") && m.size() > 1) {
+                if (m.containsKey("@id")) {
                     result.add((String) m.get("@id"));
                 }
                 for (Object k : m.keySet()) {
@@ -97,7 +100,7 @@ public class Records {
         var it = uris.iterator();
         while (it.hasNext()) {
             String dependencyToDownload = it.next();
-            try (PreparedStatement statement = connection.prepareStatement("SELECT id FROM uris WHERE URI = ?")) {
+            try (PreparedStatement statement = connection.prepareStatement("SELECT id FROM entities WHERE URI = ?")) {
                 statement.setString(1, dependencyToDownload);
                 statement.execute();
                 try (ResultSet resultSet = statement.getResultSet()) {

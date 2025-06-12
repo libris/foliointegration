@@ -20,15 +20,13 @@ public class FolioSync {
         // Read a batch, ready for syncing to folio
         long modified = syncedUntil;
         List<Long> ids = new ArrayList<>(50);
-        List<String> datas = new ArrayList<>(50);
-        try (PreparedStatement statement = connection.prepareStatement("SELECT id, entity, modified FROM entities WHERE modified >= ? ORDER BY modified ASC LIMIT 50")) {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT id, modified FROM entities WHERE modified >= ? ORDER BY modified ASC LIMIT 50")) {
             statement.setLong(1, syncedUntil);
             statement.execute();
             try (ResultSet resultSet = statement.getResultSet()) {
                 while (resultSet.next()) {
                     ids.add(resultSet.getLong(1));
-                    datas.add(resultSet.getString(2));
-                    modified = resultSet.getLong(3);
+                    modified = resultSet.getLong(2);
                 }
             }
         }
@@ -36,8 +34,8 @@ public class FolioSync {
         // Possibly write
         for (int i = 0; i < ids.size(); ++i) {
             long id = ids.get(i);
-            String data = datas.get(i);
-            considerForExport(id, data, connection);
+            var cycleProtection = new HashSet<Long>();
+            considerForExport(id, cycleProtection, connection);
         }
 
         // Commit state for next pass
@@ -48,7 +46,24 @@ public class FolioSync {
         connection.commit();
     }
 
-    private static void considerForExport(long id, String data, Connection connection) throws SQLException, IOException {
+    private static void considerForExport(long id, Set<Long> cycleProtection, Connection connection) throws SQLException, IOException {
+        if (cycleProtection.contains(id))
+            return;
+        cycleProtection.add(id);
+
+        // Read the record data
+        String data = null;
+        try (PreparedStatement statement = connection.prepareStatement("SELECT entity FROM entities WHERE id = ?")) {
+            statement.setLong(1, id);
+            statement.execute();
+            try (ResultSet resultSet = statement.getResultSet()) {
+                if (resultSet.next()) {
+                    data = resultSet.getString(1);
+                }
+            }
+        }
+        if (data == null)
+            return;
         Map mainEntity = Storage.mapper.readValue(data, Map.class);
 
         // Is this a folio root record (an 'Item' held by a selected library)?
@@ -64,25 +79,26 @@ public class FolioSync {
             }
         }
 
-        if (isRootRecord) { // If this *is* a root record, we may need to write it to folio.
+        // If this *is* a root record, we may need to write it to folio.
+        if (isRootRecord) {
 
             long checksum = calculateCheckSum(data);
-            boolean exported = false; // assumption
+            boolean export = true; // assumption
             try (PreparedStatement statement = connection.prepareStatement("SELECT checksum FROM exported_checksum WHERE entity_id = ?")) {
                 statement.setLong(1, id);
                 statement.execute();
                 try (ResultSet resultSet = statement.getResultSet()) {
                     if (resultSet.next()) {
                         long lastExportedChecksum = resultSet.getLong(1);
-                        if (lastExportedChecksum != checksum) {
-                            // A visible difference. Write it to folio!
-
-                            exported = true;
+                        if (lastExportedChecksum == checksum) {
+                            export = false;
                         }
                     }
                 }
             }
-            if (exported) {
+            if (export) {
+                // A visible difference. Write it to folio!
+                System.err.println(" ** WRITE OF: " + id);
                 try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, checksum) VALUES(?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
                     statement.setLong(1, id);
                     statement.setLong(2, checksum);
@@ -90,8 +106,31 @@ public class FolioSync {
                 }
             }
 
-        } else { // Could it have affected another record that is a root record ?
-            // TODO
+        } else { // If not (a root record): Could it have affected another record that is a root record ?
+
+            //List<Long> possiblyAffectedIDs = new ArrayList<>(); // THIS ONE COULD GET HUGE
+            long[] possiblyAffectedIDs = new long[200];
+            int possiblyAffectedIDsUsage = 0;
+
+            if (mainEntity.get("@id") instanceof String mainEntityId) {
+
+                try (PreparedStatement statement = connection.prepareStatement("SELECT entity_id FROM referenced_uris WHERE referenced_uri = ?")) {
+                    statement.setString(1, mainEntityId);
+                    statement.execute();
+                    try (ResultSet resultSet = statement.getResultSet()) {
+                        while (resultSet.next()) {
+                            long referencingEntityId = resultSet.getLong(1);
+                            possiblyAffectedIDs[possiblyAffectedIDsUsage++] = referencingEntityId;
+                        }
+                    }
+                }
+
+            }
+
+            for (int i = 0; i < possiblyAffectedIDsUsage; ++i) {
+                considerForExport(possiblyAffectedIDs[i], cycleProtection, connection);
+            }
+
         }
     }
 

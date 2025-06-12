@@ -105,7 +105,7 @@ public class Storage {
                     CREATE TABLE entities (
                         id INTEGER PRIMARY KEY,
                         uri TEXT,
-                        entity TEXT,
+                        entity BLOB,
                         modified INTEGER,
                         UNIQUE(uri)
                     );
@@ -116,11 +116,11 @@ public class Storage {
         }
         {
             String sql = """
-                    CREATE TABLE uris (
+                    CREATE TABLE referenced_uris (
                           id INTEGER PRIMARY KEY,
-                          uri TEXT,
+                          referenced_uri TEXT,
                           entity_id INTEGER,
-                          UNIQUE(uri, entity_id) ON CONFLICT IGNORE,
+                          UNIQUE(referenced_uri, entity_id) ON CONFLICT IGNORE,
                           FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
                       );
                     """.stripIndent();
@@ -156,7 +156,7 @@ public class Storage {
         }
         {
             String sql = """
-                    CREATE INDEX idx_uris_uri ON uris(uri);
+                    CREATE INDEX idx_referenced_uris_uri ON referenced_uris(referenced_uri);
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.execute();
@@ -164,7 +164,7 @@ public class Storage {
         }
         {
             String sql = """
-                    CREATE INDEX idx_uris_entity_id ON uris(entity_id);
+                    CREATE INDEX idx_referenced_uris_entity_id ON referenced_uris(entity_id);
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.execute();
@@ -173,6 +173,14 @@ public class Storage {
         {
             String sql = """
                     CREATE INDEX idx_entities_modified ON entities(modified);
+                    """.stripIndent();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.execute();
+            }
+        }
+        {
+            String sql = """
+                    CREATE INDEX idx_entities_uri ON entities(uri);
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.execute();

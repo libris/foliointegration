@@ -78,10 +78,15 @@ public class Server {
                     Storage.transitionToApplicationState(Storage.APPLICATION_STATE.STAYING_IN_SYNC, connection);
                     connection.commit();
                     break;
-                case STAYING_IN_SYNC:
-                    EmmSync.run();
+                case STAYING_IN_SYNC: {
+                    boolean changesMade = false;
+                    changesMade |= EmmSync.run();
                     FolioSync.run();
+                    if (!changesMade) {
+                        Thread.sleep(100);
+                    }
                     break;
+                }
             }
         }
 

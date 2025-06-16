@@ -40,7 +40,7 @@ public class FolioSync {
 
         // Commit state for next pass
         if (modified > syncedUntil) {
-            System.err.println("Synced folio up to: " + modified);
+            //System.err.println("Synced folio up to: " + modified);
             Storage.writeState(SYNCED_UNTIL_KEY, "" + modified, connection);
         }
         connection.commit();
@@ -82,6 +82,7 @@ public class FolioSync {
         // If this *is* a root record, we may need to write it to folio.
         if (isRootRecord) {
 
+            // Has this record already been with this checksum (then we should skip it).
             long checksum = calculateCheckSum(data);
             boolean export = true; // assumption
             try (PreparedStatement statement = connection.prepareStatement("SELECT checksum FROM exported_checksum WHERE entity_id = ?")) {
@@ -98,7 +99,7 @@ public class FolioSync {
             }
             if (export) {
                 // A visible difference. Write it to folio!
-                System.err.println(" ** WRITE OF: " + id);
+                System.err.println(" ** WRITE OF: " + mainEntity.get("@id"));
                 try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, checksum) VALUES(?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
                     statement.setLong(1, id);
                     statement.setLong(2, checksum);

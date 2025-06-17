@@ -27,6 +27,7 @@ public class EmmSync {
         Connection connection = Storage.getConnection();
         long syncedUntil = Long.parseLong( Storage.getState(SYNCED_UNTIL_KEY, connection) );
         String lastTakenChangeId = Storage.getState(LAST_TAKEN_CHANGE_KEY, connection);
+        String newLastTakenChangeId = null;
         boolean changesMade = false;
 
         long newUntilTarget = syncedUntil + 2 * 60 * 1000; // Take (up to) 2 minutes of changes per iteration.
@@ -51,7 +52,8 @@ public class EmmSync {
                         String changeId = "" + item.get("published") + item.get("id");
                         if (!changeId.equals(lastTakenChangeId)) {
                             changesMade |= handleEmmActivity(item, connection);
-                            lastTakenChangeId = changeId;
+                            if (newLastTakenChangeId == null)
+                                newLastTakenChangeId = changeId;
                         }
                     }
                 }
@@ -60,7 +62,7 @@ public class EmmSync {
                 long earliestTimeOnPage = ZonedDateTime.parse((String) latest.get("published")).toInstant().toEpochMilli();
                 if (earliestTimeOnPage < syncedUntil) {
                     Storage.writeState(SYNCED_UNTIL_KEY, "" + newUntilTarget, connection);
-                    Storage.writeState(LAST_TAKEN_CHANGE_KEY, lastTakenChangeId, connection);
+                    Storage.writeState(LAST_TAKEN_CHANGE_KEY, newLastTakenChangeId, connection);
                     connection.commit(); // Time stamp and updated data together
                     //Storage.log("Now synced up until: " + newUntilTarget + " (" + Instant.ofEpochMilli(newUntilTarget) + ")");
                     uri = null;

@@ -120,7 +120,7 @@ public class Storage {
                           id INTEGER PRIMARY KEY,
                           referenced_uri TEXT,
                           entity_id INTEGER,
-                          UNIQUE(referenced_uri, entity_id) ON CONFLICT IGNORE,
+                          UNIQUE(referenced_uri, entity_id),
                           FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
                       );
                     """.stripIndent();
@@ -225,7 +225,7 @@ public class Storage {
 
     public static synchronized void writeState(String key, String value, Connection connection) {
         String sql = """
-                    INSERT INTO state (key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value;
+                    INSERT OR REPLACE INTO state (key, value) VALUES(?, ?);
                     """.stripIndent();
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, key);

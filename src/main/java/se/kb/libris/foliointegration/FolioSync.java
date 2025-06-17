@@ -20,7 +20,7 @@ public class FolioSync {
         // Read a batch, ready for syncing to folio
         long modified = syncedUntil;
         List<Long> ids = new ArrayList<>(50);
-        try (PreparedStatement statement = connection.prepareStatement("SELECT id, modified FROM entities WHERE modified >= ? ORDER BY modified ASC LIMIT 50")) {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT id, modified FROM entities WHERE modified > ? ORDER BY modified ASC LIMIT 50")) {
             statement.setLong(1, syncedUntil);
             statement.execute();
             try (ResultSet resultSet = statement.getResultSet()) {
@@ -109,9 +109,11 @@ public class FolioSync {
 
         } else { // If not (a root record): Could it have affected another record that is a root record ?
 
-            //List<Long> possiblyAffectedIDs = new ArrayList<>(); // THIS ONE COULD GET HUGE
-            long[] possiblyAffectedIDs = new long[200];
-            int possiblyAffectedIDsUsage = 0;
+            // THIS ONE COULD GET HUGE.
+            // A Long (upper-case L) object uses 24 bytes.
+            // A long (lower-case l), primitive, uses only 8 but can't be stored in a list.
+            // Consider doing something better here, perhaps.
+            List<Long> possiblyAffectedIDs = new ArrayList<>();
 
             if (mainEntity.get("@id") instanceof String mainEntityId) {
 
@@ -121,15 +123,15 @@ public class FolioSync {
                     try (ResultSet resultSet = statement.getResultSet()) {
                         while (resultSet.next()) {
                             long referencingEntityId = resultSet.getLong(1);
-                            possiblyAffectedIDs[possiblyAffectedIDsUsage++] = referencingEntityId;
+                            possiblyAffectedIDs.add( referencingEntityId );
                         }
                     }
                 }
 
             }
 
-            for (int i = 0; i < possiblyAffectedIDsUsage; ++i) {
-                considerForExport(possiblyAffectedIDs[i], cycleProtection, connection);
+            for (Long referencingEntityId : possiblyAffectedIDs) {
+                considerForExport(referencingEntityId, cycleProtection, connection);
             }
 
         }

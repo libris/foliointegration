@@ -24,7 +24,7 @@ public class Records {
             long insertedRowId = 0;
             String mainEntityId = (String) mainEntity.get("@id");
             // Write the entity itself
-            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO entities(uri, entity, modified) VALUES(?, ?, ?) ON CONFLICT(uri) DO UPDATE SET entity=excluded.entity, modified=excluded.modified")) {
+            try (PreparedStatement statement = connection.prepareStatement("INSERT OR REPLACE INTO entities(uri, entity, modified) VALUES(?, ?, ?)")) {
                 statement.setString(1, mainEntityId);
                 statement.setString(2, Storage.mapper.writeValueAsString(mainEntity));
                 statement.setLong(3, new Date().toInstant().toEpochMilli());

@@ -37,6 +37,7 @@ public class EmmSync {
 
         try (HttpClient client = HttpClient.newHttpClient()) {
             URI uri = new URI(System.getenv("EMMBASEURL")).resolve("?until=" + newUntilTarget);
+            boolean foundAlreadyTakenChange = false;
             while (uri != null) {
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(uri)
@@ -48,12 +49,18 @@ public class EmmSync {
                 List<Map<String,?>> items = ((List<Map<String,?>>) responseMap.get("orderedItems"));
                 for (Map<String, ?> item : items) {
                     long modified = ZonedDateTime.parse((String) item.get("published")).toInstant().toEpochMilli();
-                    if (modified + timeTruncationErrorMargin > syncedUntil) {
-                        String changeId = "" + item.get("published") + item.get("id");
-                        if (!changeId.equals(lastTakenChangeId)) {
-                            changesMade |= handleEmmActivity(item, connection);
+                    if (!foundAlreadyTakenChange) {
+                        if (modified + timeTruncationErrorMargin > syncedUntil) {
+
+                            String changeId = "" + item.get("published") + item.get("id");
                             if (newLastTakenChangeId == null)
                                 newLastTakenChangeId = changeId;
+
+                            if (!changeId.equals(lastTakenChangeId)) {
+                                changesMade |= handleEmmActivity(item, connection);
+                            } else {
+                                foundAlreadyTakenChange = true;
+                            }
                         }
                     }
                 }

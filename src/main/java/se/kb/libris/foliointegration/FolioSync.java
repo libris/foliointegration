@@ -82,7 +82,10 @@ public class FolioSync {
         // If this *is* a root record, we may need to write it to folio.
         if (isRootRecord) {
 
-            // Has this record already been with this checksum (then we should skip it).
+            // Has this record already been exported with this checksum (then we should skip it).
+
+            // NEED TO EMBELLISH HERE FIRST
+
             long checksum = calculateCheckSum(data);
             boolean export = true; // assumption
             try (PreparedStatement statement = connection.prepareStatement("SELECT checksum FROM exported_checksum WHERE entity_id = ?")) {

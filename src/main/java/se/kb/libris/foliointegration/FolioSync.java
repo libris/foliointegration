@@ -83,10 +83,8 @@ public class FolioSync {
         if (isRootRecord) {
 
             // Has this record already been exported with this checksum (then we should skip it).
-
-            // NEED TO EMBELLISH HERE FIRST
-
-            long checksum = calculateCheckSum(data);
+            Records.embellishWithLocalData(mainEntity, new HashSet<>(), connection);
+            long checksum = calculateCheckSum(mainEntity);
             boolean export = true; // assumption
             try (PreparedStatement statement = connection.prepareStatement("SELECT checksum FROM exported_checksum WHERE entity_id = ?")) {
                 statement.setLong(1, id);
@@ -102,7 +100,7 @@ public class FolioSync {
             }
             if (export) {
                 // A visible difference. Write it to folio!
-                System.err.println(" ** WRITE OF: " + mainEntity.get("@id"));
+                System.err.println(" ** WRITE OF: " + mainEntity);
                 try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, checksum) VALUES(?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
                     statement.setLong(1, id);
                     statement.setLong(2, checksum);

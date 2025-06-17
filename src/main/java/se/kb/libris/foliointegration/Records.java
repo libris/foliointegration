@@ -100,7 +100,7 @@ public class Records {
         var it = uris.iterator();
         while (it.hasNext()) {
             String dependencyToDownload = it.next();
-            try (PreparedStatement statement = connection.prepareStatement("SELECT id FROM entities WHERE URI = ?")) {
+            try (PreparedStatement statement = connection.prepareStatement("SELECT id FROM entities WHERE uri = ?")) {
                 statement.setString(1, dependencyToDownload);
                 statement.execute();
                 try (ResultSet resultSet = statement.getResultSet()) {
@@ -108,6 +108,44 @@ public class Records {
                         it.remove();
                     }
                 }
+            }
+        }
+    }
+
+    public static void embellishWithLocalData(Object node, Set<String> cycleProtection, Connection connection) throws SQLException, IOException {
+        switch (node) {
+            case List l: {
+                for (Object o : l) {
+                    embellishWithLocalData(o, cycleProtection, connection);
+                }
+                break;
+            }
+            case Map m: {
+                if (m.containsKey("@id") && m.size() == 1) {
+
+                    if (cycleProtection.contains( m.get("@id") ))
+                        return;
+                    cycleProtection.add((String) m.get("@id"));
+
+                    try (PreparedStatement statement = connection.prepareStatement("SELECT entity FROM entities WHERE uri = ?")) {
+                        statement.setString(1, (String) m.get("@id"));
+                        statement.execute();
+                        try (ResultSet resultSet = statement.getResultSet()) {
+                            if (resultSet.next()) {
+                                var linkedEntity = Storage.mapper.readValue(resultSet.getString(1), Map.class);
+                                m.clear();
+                                m.putAll(linkedEntity);
+                            }
+                        }
+                    }
+                }
+                for (Object k : m.keySet()) {
+                    embellishWithLocalData(m.get(k), cycleProtection, connection);
+                }
+                break;
+            }
+            default: {
+                break;
             }
         }
     }

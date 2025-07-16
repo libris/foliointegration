@@ -39,6 +39,8 @@ public class Server {
 
     public static void main(String[] args) throws Exception {
 
+        //FolioWriting.testWrite();
+
         var server = createServer();
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");

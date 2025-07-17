@@ -15,35 +15,41 @@ public class FolioSync {
 
     public static void run() throws SQLException, IOException {
         Connection connection = Storage.getConnection();
-        long syncedUntil = Long.parseLong( Storage.getState(SYNCED_UNTIL_KEY, connection) );
+        try {
+            long syncedUntil = Long.parseLong(Storage.getState(SYNCED_UNTIL_KEY, connection));
 
-        // Read a batch, ready for syncing to folio
-        long modified = syncedUntil;
-        List<Long> ids = new ArrayList<>(50);
-        try (PreparedStatement statement = connection.prepareStatement("SELECT id, modified FROM entities WHERE modified > ? ORDER BY modified ASC LIMIT 50")) {
-            statement.setLong(1, syncedUntil);
-            statement.execute();
-            try (ResultSet resultSet = statement.getResultSet()) {
-                while (resultSet.next()) {
-                    ids.add(resultSet.getLong(1));
-                    modified = resultSet.getLong(2);
+            // Read a batch, ready for syncing to folio
+            long modified = syncedUntil;
+            List<Long> ids = new ArrayList<>(50);
+            try (PreparedStatement statement = connection.prepareStatement("SELECT id, modified FROM entities WHERE modified > ? ORDER BY modified ASC LIMIT 50")) {
+                statement.setLong(1, syncedUntil);
+                statement.execute();
+                try (ResultSet resultSet = statement.getResultSet()) {
+                    while (resultSet.next()) {
+                        ids.add(resultSet.getLong(1));
+                        modified = resultSet.getLong(2);
+                    }
                 }
             }
+
+            // Possibly write
+            for (int i = 0; i < ids.size(); ++i) {
+                long id = ids.get(i);
+                var cycleProtection = new HashSet<Long>();
+                considerForExport(id, cycleProtection, connection);
+            }
+
+            // Commit state for next pass
+            FolioWriting.flushQueue();
+            if (modified > syncedUntil) {
+                Storage.writeState(SYNCED_UNTIL_KEY, "" + modified, connection);
+            }
+            connection.commit();
+        } catch (Exception e) {
+            connection.rollback();
+            Storage.log("ERROR: Failed to write complete update batch to FOLIO.", e);
         }
 
-        // Possibly write
-        for (int i = 0; i < ids.size(); ++i) {
-            long id = ids.get(i);
-            var cycleProtection = new HashSet<Long>();
-            considerForExport(id, cycleProtection, connection);
-        }
-
-        // Commit state for next pass
-        if (modified > syncedUntil) {
-            //System.err.println("Synced folio up to: " + modified);
-            Storage.writeState(SYNCED_UNTIL_KEY, "" + modified, connection);
-        }
-        connection.commit();
     }
 
     private static void considerForExport(long id, Set<Long> cycleProtection, Connection connection) throws SQLException, IOException {
@@ -101,6 +107,7 @@ public class FolioSync {
             if (export) {
                 // A visible difference. Write it to folio!
                 //System.err.println(" ** WRITE OF: " + mainEntity);
+                FolioWriting.queueForExport(mainEntity);
                 try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, checksum) VALUES(?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
                     statement.setLong(1, id);
                     statement.setLong(2, checksum);

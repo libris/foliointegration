@@ -6,6 +6,8 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class FolioWriting {
@@ -13,6 +15,8 @@ public class FolioWriting {
     private static final String password;
     private static final String folioBaseUri;
     private static final String folioTenant;
+
+    private static List<Map> batch = new ArrayList<>();
 
     static {
         username = System.getenv("FOLIOUSER");
@@ -116,5 +120,13 @@ public class FolioWriting {
         String token = getToken();
         System.err.println("FOLIO TOKEN:" + token);
         doMIUupsert(token);
+    }
+
+    public static void queueForExport(Map mainEntity) {
+        batch.add(mainEntity);
+    }
+
+    public static void flushQueue() {
+        batch.clear();
     }
 }

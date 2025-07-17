@@ -208,7 +208,7 @@ public class Storage {
             config.setJournalMode(SQLiteConfig.JournalMode.WAL);
             config.setSynchronous(SQLiteConfig.SynchronousMode.OFF);
             config.setPragma(SQLiteConfig.Pragma.FOREIGN_KEYS, "ON");
-            _connection = DriverManager.getConnection(url);
+            _connection = DriverManager.getConnection(url, config.toProperties());
 
             if (!preExistingState) {
                 initDb(_connection);

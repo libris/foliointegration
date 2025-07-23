@@ -17,9 +17,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EmmDumpImport {
 
-    private final static String OFFSET_KEY = "EMMDumpStateOffset";
-    private final static String DUMP_ID_KEY = "EMMDumpStateCreationTime";
-    private final static String DUMP_SIGEL_KEY = "EMMDumpStateSigel";
+    public final static String OFFSET_KEY = "EMMDumpStateOffset";
+    public final static String TOTALITEMS_KEY = "EMMDumpStateTotalItems";
+    public final static String DUMP_ID_KEY = "EMMDumpStateCreationTime";
+    public final static String DUMP_SIGEL_KEY = "EMMDumpStateSigel";
     private final static int maxThreads = 8;
 
     final static ConcurrentHashMap<String, Map<String, ?>> prefetchedPages = new ConcurrentHashMap<>();
@@ -110,6 +111,10 @@ public class EmmDumpImport {
                     }
 
                     Storage.writeState(OFFSET_KEY, offset, connection);
+                    if (responseMap.containsKey("totalItems")) {
+                        Integer totalItems = (Integer) responseMap.get("totalItems");
+                        Storage.writeState(TOTALITEMS_KEY, ""+totalItems, connection);
+                    }
 
                     connection.commit(); // The record writes AND our new consumed offset together
 
@@ -145,6 +150,7 @@ public class EmmDumpImport {
             }
 
             Storage.clearState(OFFSET_KEY, connection);
+            Storage.clearState(TOTALITEMS_KEY, connection);
             Storage.clearState(DUMP_ID_KEY, connection);
 
             // If there are more dumps to download, set starting conditions for the next one.

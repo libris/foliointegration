@@ -146,7 +146,7 @@ public class EmmDumpImport {
             }
             if (candidateUntil < preExistingUntil) {
                 Storage.writeState(EmmSync.SYNCED_UNTIL_KEY, ""+candidateUntil, connection);
-                Storage.log("Sync-from time is now set to: " + candidateUntil + " (" + dumpCreationTime + ")");
+                Storage.log("EMM Sync-from time is now set to: " + candidateUntil + " (" + dumpCreationTime + ")");
             }
 
             Storage.clearState(OFFSET_KEY, connection);

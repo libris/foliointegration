@@ -60,34 +60,23 @@ public class FolioWriting {
         return null;
     }
 
-    private static void doMIUupsert(String token) {
+    public static synchronized void queueForExport(Map mainEntity) {
+        batch.add(mainEntity);
+    }
 
-        // WHAT TO SEND:
-        // https://github.com/folio-org/mod-inventory-update/blob/master/ramls/inventory-record-set-with-hrids.json
+    public static synchronized void flushQueue() throws IOException {
+        if (batch.isEmpty())
+            return;
 
-        // DOCS:
-        // https://github.com/folio-org/mod-inventory-update/blob/master/ramls/inventory-update.raml
+        String token = getToken(); // TEMP! REUSE! DO NOT GET A NEW ONE FOR EVERY REQUEST.
 
-        // Minimum required properties, "instance" object with [ "source", "title", "instanceTypeId", "hrid" ] as determined by the json-schema.
-
-        String body = """
-                {
-                "instance":
-                {
-                    "hrid": "abcdef",
-                    "title": "some title",
-                    "source": "LIBRIS",
-                    "instanceTypeId": "30fffe0e-e985-4144-b2e2-1e8179bdb41f"
-                },
-                "holdingsRecords":[]
-                }
-                """;
-
+        Map recordSet = Map.of("inventoryRecordSets", batch);
+        String body = Storage.mapper.writeValueAsString(recordSet);
 
         for (int i = 0; i < 10; ++i) {
             try (HttpClient client = HttpClient.newHttpClient()) {
                 URI uri = new URI(folioBaseUri);
-                uri = uri.resolve("/inventory-upsert-hrid");
+                uri = uri.resolve("/inventory-batch-upsert-hrid");
 
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(uri)
@@ -98,10 +87,15 @@ public class FolioWriting {
                         .PUT(HttpRequest.BodyPublishers.ofString(body))
                         .build();
 
-                System.err.println("SENDING UPSERT: " + uri.toString());
+                //System.err.println("SENDING UPSERT: " + uri.toString());
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                System.err.println("UPSERT RESPONSE: " + response + " / " + response.body());
+                if (response.statusCode() != 200) {
+                    Storage.log("Failed FOLIO write: " + response + " / " + response.body());
+                    continue;
+                }
                 // IF OK
+                Storage.log("Synced " + batch.size() + " records to FOLIO.");
+                batch.clear();
                 return;
             } catch (IOException | URISyntaxException | InterruptedException e) {
                 try {
@@ -111,22 +105,8 @@ public class FolioWriting {
                 }
             }
         }
-    }
 
-    public static void testWrite() {
-
-        // THIS SHIT IS WORK-IN-PROGRESS. NOT YET USABLE.
-
-        String token = getToken();
-        System.err.println("FOLIO TOKEN:" + token);
-        doMIUupsert(token);
-    }
-
-    public static void queueForExport(Map mainEntity) {
-        batch.add(mainEntity);
-    }
-
-    public static void flushQueue() {
-        batch.clear();
+        // All retries failed.
+        throw new IOException("Writing to FOLIO failed, even with retries.");
     }
 }

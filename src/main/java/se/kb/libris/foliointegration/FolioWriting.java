@@ -77,7 +77,7 @@ public class FolioWriting {
                     "hrid": "abcdef",
                     "title": "some title",
                     "source": "LIBRIS",
-                    "instanceTypeId": "Print"
+                    "instanceTypeId": "30fffe0e-e985-4144-b2e2-1e8179bdb41f"
                 },
                 "holdingsRecords":[]
                 }

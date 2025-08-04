@@ -26,7 +26,7 @@ public class Format {
         var converted = Map.of("instance",
                 Map.of("source", "LIBRIS",
                         "hrid", originalRootHolding.get("@id"),
-                        "instanceTypeId", originalMainEntity.get("@type"),
+                        "instanceTypeId", "30fffe0e-e985-4144-b2e2-1e8179bdb41f", // = "unspecified" - for now.
                         "title", title
                 ),
                 "holdingsRecords", new ArrayList<>() // we probably don't want this ?

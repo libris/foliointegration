@@ -67,6 +67,7 @@ public class IntegrationServlet extends HttpServlet {
                           </head>
                           <body>
                             <center>
+                              <div style="border:1px solid black; margin:25px 50px 75px 100px">
                         """.stripIndent();
         os.write(intro.getBytes(StandardCharsets.UTF_8));
 
@@ -76,8 +77,10 @@ public class IntegrationServlet extends HttpServlet {
         if (downloadingSigel == null)
             downloadingSigel = "n/a";
 
+        boolean passedActive = false;
         for (int i = 0; i < sigelList.length; ++i) {
             if (sigelList[i].equals(downloadingSigel)) {
+                passedActive = true;
                 String totalItemsString = Storage.getState(EmmDumpImport.TOTALITEMS_KEY, readOnlyConnection);
                 String offsetString = Storage.getState(EmmDumpImport.OFFSET_KEY, readOnlyConnection);
                 float progress = 0.0f;
@@ -86,16 +89,28 @@ public class IntegrationServlet extends HttpServlet {
                     int offset = Integer.parseInt(offsetString);
                     progress = (float) offset / (float) totalItems;
                 }
+                int percent = (int) (100.0f * progress);
+                String s = "<br/>Downloading EMM dump for sigel: " + downloadingSigel + " <br/>" +
+                        "<label>Progress:</label>" +
+	                    "<progress value=\"" + percent +  "\" max=\"100\"> " + percent +  "% </progress> <br/><br/>";
 
-                String s = "Currently loading dump: " + downloadingSigel + ": " + 100.0f*progress + "%";
                 os.write(s.getBytes(StandardCharsets.UTF_8));
             } else {
-                String s = sigelList[i] + "<br/>";
-                os.write(s.getBytes(StandardCharsets.UTF_8));
+                if (passedActive) {
+                    String s = "<br/>Downloading EMM dump for sigel: " + sigelList[i] + " <br/>" +
+                            "<label>Progress:</label>" +
+                            "<progress value=\"0\" max=\"100\"> 0% </progress> <br/><br/>";
+                    os.write(s.getBytes(StandardCharsets.UTF_8));
+                } else {
+                    String s = "<br/>Downloading EMM dump for sigel: " + sigelList[i] + " <br/>" +
+                            "<label>Progress:</label>" +
+                            "<progress value=\"100\" max=\"100\"> 100% </progress> <br/><br/>";
+                    os.write(s.getBytes(StandardCharsets.UTF_8));
+                }
             }
         }
-
         String outro = """
+                              </div>
                             </center>
                           </body>
                         </html>

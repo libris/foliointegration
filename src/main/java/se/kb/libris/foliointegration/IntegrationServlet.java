@@ -11,8 +11,27 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Instant;
 
 public class IntegrationServlet extends HttpServlet {
+
+    private final String intro = """
+                        <!DOCTYPE html>
+                        <html lang="en">
+                          <head>
+                            <meta charset="utf-8">
+                            <title>LibrisXL/FOLIO integration</title>
+                          </head>
+                          <body>
+                            <center>
+                              <div style="border:1px solid black; margin:25px 50px 75px 100px">
+                        """.stripIndent();
+    private final String outro = """
+                              </div>
+                            </center>
+                          </body>
+                        </html>
+                        """.stripIndent();
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         response.setStatus(200);
@@ -46,6 +65,7 @@ public class IntegrationServlet extends HttpServlet {
                 case INITIAL_LOAD_TO_FOLIO:
                     break;
                 case STAYING_IN_SYNC:
+                    renderStayingInSync(response.getOutputStream(), readOnlyConnection);
                     break;
             }
         } catch (IOException ioe) {
@@ -56,19 +76,46 @@ public class IntegrationServlet extends HttpServlet {
         response.setStatus(200);
     }
 
+    private void renderStayingInSync(OutputStream os, Connection readOnlyConnection) throws IOException {
+
+        os.write(intro.getBytes(StandardCharsets.UTF_8));
+
+        // EMM sync state
+        {
+            String untilString = Storage.getState(EmmSync.SYNCED_UNTIL_KEY, readOnlyConnection);
+            if (untilString != null) {
+                long syncedUntil = Long.parseLong(untilString);
+                long now = Instant.now().toEpochMilli();
+                long secondDiff = (now - syncedUntil) / 1000;
+                String s = "<br/>EMM synced until: " + syncedUntil + ". Meaning " + secondDiff + " seconds behind. <br/><br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+            } else {
+                String s = "<br/>Odd EMM sync state. Shouldn't happen.<br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+            }
+        }
+
+        // FOLIO sync state
+        {
+            String untilString = Storage.getState(FolioSync.SYNCED_UNTIL_KEY, readOnlyConnection);
+            if (untilString != null) {
+                long syncedUntil = Long.parseLong(untilString);
+                long now = Instant.now().toEpochMilli();
+                long secondDiff = (now - syncedUntil) / 1000;
+                String s = "<br/>FOLIO synced until: " + syncedUntil + ". Meaning " + secondDiff + " seconds behind (or up-to-date if there are no more recent changes). <br/><br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+            } else {
+                String s = "<br/>Odd FOLIO sync state. Shouldn't happen.<br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+            }
+        }
+
+        os.write(outro.getBytes(StandardCharsets.UTF_8));
+    }
+
     private void renderLibrisLoad(OutputStream os, Connection readOnlyConnection) throws IOException {
 
-        String intro = """
-                        <!DOCTYPE html>
-                        <html lang="en">
-                          <head>
-                            <meta charset="utf-8">
-                            <title>LibrisXL/FOLIO integration</title>
-                          </head>
-                          <body>
-                            <center>
-                              <div style="border:1px solid black; margin:25px 50px 75px 100px">
-                        """.stripIndent();
+
         os.write(intro.getBytes(StandardCharsets.UTF_8));
 
         String[] sigelList = System.getenv("SIGEL").split(",");
@@ -109,12 +156,7 @@ public class IntegrationServlet extends HttpServlet {
                 }
             }
         }
-        String outro = """
-                              </div>
-                            </center>
-                          </body>
-                        </html>
-                        """.stripIndent();
+
         os.write(outro.getBytes(StandardCharsets.UTF_8));
     }
 }

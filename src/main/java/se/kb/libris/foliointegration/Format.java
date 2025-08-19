@@ -25,9 +25,10 @@ public class Format {
 
         var converted = Map.of("instance",
                 Map.of("source", "LIBRIS",
-                        "hrid", originalRootHolding.get("@id"),
+                        "hrid", originalRootHolding.get("@id"), // TEMP! GET FROM ALEPH IF IT EXISTS, OR MINT NEW IN YET UNDECIDED WAY!
                         "instanceTypeId", "30fffe0e-e985-4144-b2e2-1e8179bdb41f", // = "unspecified" - for now.
-                        "title", title
+                        "title", title,
+                        "sourceUri", originalMainEntity.get("@id")
                 ),
                 "holdingsRecords", new ArrayList<>() // we probably don't want this ?
         );

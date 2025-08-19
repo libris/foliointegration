@@ -77,7 +77,6 @@ public class IntegrationServlet extends HttpServlet {
     }
 
     private void renderStayingInSync(OutputStream os, Connection readOnlyConnection) throws IOException {
-
         os.write(intro.getBytes(StandardCharsets.UTF_8));
 
         // EMM sync state
@@ -114,8 +113,6 @@ public class IntegrationServlet extends HttpServlet {
     }
 
     private void renderLibrisLoad(OutputStream os, Connection readOnlyConnection) throws IOException {
-
-
         os.write(intro.getBytes(StandardCharsets.UTF_8));
 
         String[] sigelList = System.getenv("SIGEL").split(",");

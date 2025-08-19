@@ -42,13 +42,20 @@ public class FolioWriting {
                         .build();
 
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                Map responseMap = Storage.mapper.readValue(response.body(), Map.class);
+                Map responseMap;
+                try {
+                    responseMap = Storage.mapper.readValue(response.body(), Map.class);
+                } catch (org.codehaus.jackson.JsonParseException pe) {
+                    Storage.log("Unexpected token response: " + response.body());
+                    continue;
+                }
                 if (responseMap.containsKey("okapiToken")) {
                     return (String) responseMap.get("okapiToken");
                 } else {
                     Storage.log("Unexpected FOLIO login response: " + responseMap);
                 }
             } catch (IOException | URISyntaxException | InterruptedException e) {
+                Storage.log("No token.", e);
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e2) {

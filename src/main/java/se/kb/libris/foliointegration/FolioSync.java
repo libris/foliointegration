@@ -90,8 +90,9 @@ public class FolioSync {
 
             // Has this record already been exported with this checksum (then we should skip it).
             Records.embellishWithLocalData(mainEntity, new HashSet<>(), connection);
-            mainEntity = Format.formatForFolio(mainEntity);
+            mainEntity = Format.formatForFolio(mainEntity, connection);
             long checksum = calculateCheckSum(mainEntity);
+            // TODO: Use the INSTANCE id for these instead, to avoid writing the instance multiple times on the first go (if there are multiple holdings)
             boolean export = true; // assumption
             try (PreparedStatement statement = connection.prepareStatement("SELECT checksum FROM exported_checksum WHERE entity_id = ?")) {
                 statement.setLong(1, id);

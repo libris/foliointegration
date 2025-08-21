@@ -67,8 +67,12 @@ public class FolioWriting {
         return null;
     }
 
-    public static synchronized void queueForExport(Map mainEntity) {
+    public static synchronized void queueForExport(Map mainEntity) throws IOException {
         batch.add(mainEntity);
+
+        if (batch.size() > 10) { // Too large batches results in internal http 414 in folio.
+            flushQueue();
+        }
     }
 
     public static synchronized void flushQueue() throws IOException {

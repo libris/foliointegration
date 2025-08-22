@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,6 +21,7 @@ public class FolioWriting {
     private static final String folioTenant;
 
     private static List<Map> batch = new ArrayList<>();
+    private static List<Thread> hridLookupThreads = new ArrayList<>();
 
     static {
         username = System.getenv("FOLIOUSER");
@@ -70,121 +72,78 @@ public class FolioWriting {
         return null;
     }
 
-    public static String lookupFolioHRID(String mainEntityUri) {
-        /*
-         curl --location --request GET 'https://okapi-folio-snapshot.okd-test.kb.se/inventory/instances?query=sourceUri==%22https://libris.kb.se/j2vwxtkv2rnjnhx%23it"' \
-            --header 'x-okapi-tenant: kbtest1' \
-            --header 'Content-Type: application/json' \
-            --header 'Accept: application/json' \
-            --header 'x-okapi-token: <TOKEN>'
-         */
+    private static void lookupFolioHRID(Map folioRecord) {
 
-        /*
-
-        {
-  "instances" : [ {
-    "id" : "85ced925-ad7a-4762-bad6-93ba162481e5",
-    "_version" : "4",
-    "hrid" : "http://libris.kb.se.localhost:5000/tc5blhs5383s47b#it",
-    "source" : "LIBRIS",
-    "title" : "Allting har sitt pris",
-    "administrativeNotes" : [ ],
-    "sourceUri" : "http://libris.kb.se.localhost:5000/tc5blhs5383s47b#it",
-    "parentInstances" : [ ],
-    "childInstances" : [ ],
-    "isBoundWith" : false,
-    "alternativeTitles" : [ ],
-    "editions" : [ ],
-    "series" : [ ],
-    "identifiers" : [ ],
-    "contributors" : [ ],
-    "subjects" : [ ],
-    "classifications" : [ ],
-    "publication" : [ ],
-    "publicationFrequency" : [ ],
-    "publicationRange" : [ ],
-    "electronicAccess" : [ ],
-    "instanceTypeId" : "30fffe0e-e985-4144-b2e2-1e8179bdb41f",
-    "instanceFormatIds" : [ ],
-    "physicalDescriptions" : [ ],
-    "languages" : [ ],
-    "notes" : [ ],
-    "previouslyHeld" : false,
-    "staffSuppress" : false,
-    "discoverySuppress" : false,
-    "deleted" : false,
-    "statisticalCodeIds" : [ ],
-    "statusUpdatedDate" : "2025-08-21T08:33:30.634+0000",
-    "metadata" : {
-      "createdDate" : "2025-08-21T07:29:25.178+00:00",
-      "createdByUserId" : "661487b1-5ad6-4982-bd2a-7ac2462e52f3",
-      "updatedDate" : "2025-08-21T08:33:30.635+00:00",
-      "updatedByUserId" : "661487b1-5ad6-4982-bd2a-7ac2462e52f3"
-    },
-    "tags" : {
-      "tagList" : [ ]
-    },
-    "natureOfContentTermIds" : [ ],
-    "precedingTitles" : [ ],
-    "succeedingTitles" : [ ]
-  } ],
-  "totalRecords" : 1
-}
-
-
-         */
         String token = getToken(); // TEMP! REUSE! DO NOT GET A NEW ONE FOR EVERY REQUEST.
 
-        try (HttpClient client = HttpClient.newHttpClient()) {
-            URI uri = new URI(folioBaseUri);
-            uri = uri.resolve("/inventory/instances?query=sourceUri==" + URLEncoder.encode("\"" + mainEntityUri + "\"", StandardCharsets.UTF_8));
+        Map instanceToBeSent = (Map) folioRecord.get("instance");
+        String mainEntityUri = (String) instanceToBeSent.get("sourceUri");
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(uri)
-                    .header("X-Okapi-Tenant", folioTenant)
-                    .header("Accept", "application/json")
-                    .header("x-okapi-token", token)
-                    .GET()
-                    .build();
+        while (true) {
+            try (HttpClient client = HttpClient.newHttpClient()) {
+                URI uri = new URI(folioBaseUri);
+                uri = uri.resolve("/inventory/instances?query=sourceUri==" + URLEncoder.encode("\"" + mainEntityUri + "\"", StandardCharsets.UTF_8));
 
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                Storage.log("Failed FOLIO lookup: " + response + " / " + response.body());
-                return null;
-            }
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(uri)
+                        .header("X-Okapi-Tenant", folioTenant)
+                        .header("Accept", "application/json")
+                        .header("x-okapi-token", token)
+                        .GET()
+                        .build();
 
-            //Storage.log("source lookup: " + response.body());
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() != 200) {
+                    Storage.log("Failed FOLIO lookup: " + response + " / " + response.body());
+                    return;
+                }
 
-            Map responseMap = Storage.mapper.readValue(response.body(), Map.class);
-            if (responseMap.containsKey("instances")) {
-                List instances = (List) responseMap.get("instances");
-                if (!instances.isEmpty()) {
-                    Map instance = (Map) instances.get(0); // There should never be more than one instance having this specifik ID
-                    if (instance.containsKey("hrid")) {
-                        return (String) instance.get("hrid");
+                Map responseMap = Storage.mapper.readValue(response.body(), Map.class);
+                if (responseMap.containsKey("instances")) {
+                    List instances = (List) responseMap.get("instances");
+                    if (!instances.isEmpty()) {
+                        Map instanceFromFolio = (Map) instances.get(0); // There should never be more than one instance having this specifik ID
+                        if (instanceFromFolio.containsKey("hrid")) {
+                            //Storage.log("Replaced outgoing HRID: " + instanceFromFolio.get("hrid"));
+                            instanceToBeSent.put("hrid", instanceFromFolio.get("hrid"));
+                            return;
+                        }
+                    } else {
+                        // NO HRID OBATINED FROM FOLIO, NEED A NEW ONE!
+                        return;
                     }
                 }
-            }
-        } catch (IOException | URISyntaxException | InterruptedException e) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e2) {
-                // ignore
+            } catch (IOException | URISyntaxException | InterruptedException e) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e2) {
+                    // ignore
+                }
+                Storage.log("Retrying HRID lookup for: " + mainEntityUri);
             }
         }
-
-        return null;
     }
 
-    public static synchronized void queueForExport(Map mainEntity) throws IOException {
-        batch.add(mainEntity);
+    public static synchronized void queueForExport(Map _folioRecord) throws IOException, InterruptedException {
+        HashMap folioRecord = new HashMap(_folioRecord);
+        batch.add(folioRecord);
 
-        if (batch.size() > 10) { // Too large batches results in internal http 414 in folio.
+        Thread t = Thread.startVirtualThread(() -> lookupFolioHRID(folioRecord));
+        hridLookupThreads.add(t);
+
+        if (batch.size() > 20) { // Too large batches results in internal http 414 in folio.
             flushQueue();
         }
     }
 
-    public static synchronized void flushQueue() throws IOException {
+    public static synchronized void flushQueue() throws IOException, InterruptedException {
+
+        // All HRID lookups must have concluded before flushing is possible
+        for (Thread t : hridLookupThreads) {
+            t.join();
+        }
+        hridLookupThreads.clear();
+
         if (batch.isEmpty())
             return;
 

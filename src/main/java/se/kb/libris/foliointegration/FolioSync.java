@@ -52,7 +52,7 @@ public class FolioSync {
 
     }
 
-    private static void considerForExport(long id, Set<Long> cycleProtection, Connection connection) throws SQLException, IOException {
+    private static void considerForExport(long id, Set<Long> cycleProtection, Connection connection) throws SQLException, IOException, InterruptedException {
         if (cycleProtection.contains(id))
             return;
         cycleProtection.add(id);

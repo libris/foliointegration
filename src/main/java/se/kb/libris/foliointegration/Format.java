@@ -1,16 +1,12 @@
 package se.kb.libris.foliointegration;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -55,7 +51,7 @@ public class Format {
         for (Map item : allItems) {
             String holdingHrid =  item.get("@id") + (String)((Map) item.get("heldBy")).get("@id"); // TEMP
             Map holdingRecord = Map.of(
-                    "permanentLocationId", "b3826b33-be3b-49bd-b954-4b57bf84e70f",
+                    "permanentLocationId", "b3826b33-be3b-49bd-b954-4b57bf84e70f", // TEMP MAKE CONFIGURABLE
                     "sourceId", "912ecb39-c577-4596-ad4b-0ed8dedc3a33", // TEMP MAKE CONFIGURABLE
                     "hrid", holdingHrid,
                     "items", new ArrayList<>()); // Todo: Examples ?
@@ -72,24 +68,18 @@ public class Format {
                     title = (String) titleEntity.get("mainTitle");
             }
         }
-        String hrid = FolioWriting.lookupFolioHRID( (String) originalMainEntity.get("@id") ); // This is a BIG drain on write speed :(
-        if (hrid == null) {
-            // Not able to lookup HRID, make new?
+        String hrid = (String) originalMainEntity.get("@id"); // This HRID will be looked up and replaced by the folio writing code before actual writing.
 
-            hrid = (String) originalMainEntity.get("@id"); // TEMP!
-            Storage.log("Could not find HRID for " + originalMainEntity.get("@id") + " instead using: " + hrid);
-        } else {
-            Storage.log("Looked up HRID: " + hrid);
-        }
-        var converted = Map.of("instance",
-                Map.of("source", "LIBRIS",
-                        "hrid", hrid,
-                        "instanceTypeId", "30fffe0e-e985-4144-b2e2-1e8179bdb41f", // = "unspecified" - for now.
-                        "title", title,
-                        "sourceUri", originalMainEntity.get("@id")
-                ),
-                "holdingsRecords", holdingRecords
-        );
+        // Map.of is pretty, but produces immutable maps, which we cannot have here (we must replace the HRID later).
+        Map instance = new HashMap();
+        instance.put("source", "LIBRIS");
+        instance.put("hrid", hrid);
+        instance.put("instanceTypeId", "30fffe0e-e985-4144-b2e2-1e8179bdb41f"); // = "unspecified" - for now.
+        instance.put("title", title);
+        instance.put("sourceUri", originalMainEntity.get("@id"));
+        Map converted = new HashMap();
+        converted.put("instance", instance);
+        converted.put("holdingsRecords", holdingRecords);
 
         return converted;
     }

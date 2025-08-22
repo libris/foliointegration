@@ -1,6 +1,11 @@
 package se.kb.libris.foliointegration;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -44,8 +49,20 @@ public class Format {
         Map originalMainEntity = (Map) originalRootHolding.get("itemOf");
 
         List<Map> allItems = getItems( (String) originalMainEntity.get("@id"), connection);
-        //System.err.println("Holdings to attach: " + allItems);
 
+        // Holdings
+        List<Map> holdingRecords = new ArrayList<>();
+        for (Map item : allItems) {
+            String holdingHrid =  item.get("@id") + (String)((Map) item.get("heldBy")).get("@id"); // TEMP
+            Map holdingRecord = Map.of(
+                    "permanentLocationId", "b3826b33-be3b-49bd-b954-4b57bf84e70f",
+                    "sourceId", "912ecb39-c577-4596-ad4b-0ed8dedc3a33", // TEMP MAKE CONFIGURABLE
+                    "hrid", holdingHrid,
+                    "items", new ArrayList<>()); // Todo: Examples ?
+            holdingRecords.add(holdingRecord);
+        }
+
+        // Instance
         String title = "n/a";
         if (originalMainEntity.containsKey("hasTitle")) {
             List titles = (List) originalMainEntity.get("hasTitle");
@@ -55,24 +72,18 @@ public class Format {
                     title = (String) titleEntity.get("mainTitle");
             }
         }
+        String hrid = FolioWriting.lookupFolioHRID( (String) originalMainEntity.get("@id") ); // This is a BIG drain on write speed :(
+        if (hrid == null) {
+            // Not able to lookup HRID, make new?
 
-        List<Map> holdingRecords = new ArrayList<>();
-        for (Map item : allItems) {
-            String hrid =  item.get("@id") + (String)((Map) item.get("heldBy")).get("@id");
-
-            Map holdingRecord = Map.of(
-                    //"source", "LIBRIS",
-                    //"sourceUri", item.get("@id"),
-                    "permanentLocationId", "b3826b33-be3b-49bd-b954-4b57bf84e70f",
-                    "sourceId", "912ecb39-c577-4596-ad4b-0ed8dedc3a33", // TEMP MAKE CONFIGURABLE
-                    "hrid", hrid,
-                    "items", new ArrayList<>()); // Todo: Examples ?
-            holdingRecords.add(holdingRecord);
+            hrid = (String) originalMainEntity.get("@id"); // TEMP!
+            Storage.log("Could not find HRID for " + originalMainEntity.get("@id") + " instead using: " + hrid);
+        } else {
+            Storage.log("Looked up HRID: " + hrid);
         }
-
         var converted = Map.of("instance",
                 Map.of("source", "LIBRIS",
-                        "hrid", originalMainEntity.get("@id"), // TEMP! GET FROM ALEPH IF IT EXISTS, OR MINT NEW IN YET UNDECIDED WAY!
+                        "hrid", hrid,
                         "instanceTypeId", "30fffe0e-e985-4144-b2e2-1e8179bdb41f", // = "unspecified" - for now.
                         "title", title,
                         "sourceUri", originalMainEntity.get("@id")

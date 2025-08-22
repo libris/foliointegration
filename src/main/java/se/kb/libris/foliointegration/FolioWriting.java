@@ -3,9 +3,12 @@ package se.kb.libris.foliointegration;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +64,112 @@ public class FolioWriting {
                 } catch (InterruptedException e2) {
                     // ignore
                 }
+            }
+        }
+
+        return null;
+    }
+
+    public static String lookupFolioHRID(String mainEntityUri) {
+        /*
+         curl --location --request GET 'https://okapi-folio-snapshot.okd-test.kb.se/inventory/instances?query=sourceUri==%22https://libris.kb.se/j2vwxtkv2rnjnhx%23it"' \
+            --header 'x-okapi-tenant: kbtest1' \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json' \
+            --header 'x-okapi-token: <TOKEN>'
+         */
+
+        /*
+
+        {
+  "instances" : [ {
+    "id" : "85ced925-ad7a-4762-bad6-93ba162481e5",
+    "_version" : "4",
+    "hrid" : "http://libris.kb.se.localhost:5000/tc5blhs5383s47b#it",
+    "source" : "LIBRIS",
+    "title" : "Allting har sitt pris",
+    "administrativeNotes" : [ ],
+    "sourceUri" : "http://libris.kb.se.localhost:5000/tc5blhs5383s47b#it",
+    "parentInstances" : [ ],
+    "childInstances" : [ ],
+    "isBoundWith" : false,
+    "alternativeTitles" : [ ],
+    "editions" : [ ],
+    "series" : [ ],
+    "identifiers" : [ ],
+    "contributors" : [ ],
+    "subjects" : [ ],
+    "classifications" : [ ],
+    "publication" : [ ],
+    "publicationFrequency" : [ ],
+    "publicationRange" : [ ],
+    "electronicAccess" : [ ],
+    "instanceTypeId" : "30fffe0e-e985-4144-b2e2-1e8179bdb41f",
+    "instanceFormatIds" : [ ],
+    "physicalDescriptions" : [ ],
+    "languages" : [ ],
+    "notes" : [ ],
+    "previouslyHeld" : false,
+    "staffSuppress" : false,
+    "discoverySuppress" : false,
+    "deleted" : false,
+    "statisticalCodeIds" : [ ],
+    "statusUpdatedDate" : "2025-08-21T08:33:30.634+0000",
+    "metadata" : {
+      "createdDate" : "2025-08-21T07:29:25.178+00:00",
+      "createdByUserId" : "661487b1-5ad6-4982-bd2a-7ac2462e52f3",
+      "updatedDate" : "2025-08-21T08:33:30.635+00:00",
+      "updatedByUserId" : "661487b1-5ad6-4982-bd2a-7ac2462e52f3"
+    },
+    "tags" : {
+      "tagList" : [ ]
+    },
+    "natureOfContentTermIds" : [ ],
+    "precedingTitles" : [ ],
+    "succeedingTitles" : [ ]
+  } ],
+  "totalRecords" : 1
+}
+
+
+         */
+        String token = getToken(); // TEMP! REUSE! DO NOT GET A NEW ONE FOR EVERY REQUEST.
+
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            URI uri = new URI(folioBaseUri);
+            uri = uri.resolve("/inventory/instances?query=sourceUri==" + URLEncoder.encode("\"" + mainEntityUri + "\"", StandardCharsets.UTF_8));
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(uri)
+                    .header("X-Okapi-Tenant", folioTenant)
+                    .header("Accept", "application/json")
+                    .header("x-okapi-token", token)
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                Storage.log("Failed FOLIO lookup: " + response + " / " + response.body());
+                return null;
+            }
+
+            //Storage.log("source lookup: " + response.body());
+
+            Map responseMap = Storage.mapper.readValue(response.body(), Map.class);
+            if (responseMap.containsKey("instances")) {
+                List instances = (List) responseMap.get("instances");
+                if (!instances.isEmpty()) {
+                    Map instance = (Map) instances.get(0); // There should never be more than one instance having this specifik ID
+                    if (instance.containsKey("hrid")) {
+                        return (String) instance.get("hrid");
+                    }
+                }
+            }
+        } catch (IOException | URISyntaxException | InterruptedException e) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e2) {
+                // ignore
             }
         }
 

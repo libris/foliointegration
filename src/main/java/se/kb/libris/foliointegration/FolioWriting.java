@@ -23,6 +23,9 @@ public class FolioWriting {
     private static List<Map> batch = new ArrayList<>();
     private static List<Thread> hridLookupThreads = new ArrayList<>();
 
+    private static long folioTokenValidUntil = 0;
+    private static String folioToken = null;
+
     static {
         username = System.getenv("FOLIOUSER");
         password = System.getenv("FOLIOPASS");
@@ -31,46 +34,64 @@ public class FolioWriting {
     }
 
     private static String getToken() {
-        for (int i = 0; i < 10; ++i) {
-            try (HttpClient client = HttpClient.newHttpClient()) {
-                URI uri = new URI(folioBaseUri);
-                uri = uri.resolve("/authn/login-with-expiry");
-                var requestBodyMap = Map.of("tenant", folioTenant, "username", username, "password", password);
-                String requestBody = Storage.mapper.writeValueAsString(requestBodyMap);
 
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(uri)
-                        .header("X-Okapi-Tenant", folioTenant)
-                        .header("Accept", "application/json")
-                        .header("Content-type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                        .build();
+        // This will seem weird, but we want key handling to be synchronized,
+        // but SEPARATELY from the below queue/flush calls (which synchronize over the class)
+        synchronized (password) {
+            if (System.currentTimeMillis() < folioTokenValidUntil)
+                return folioToken;
 
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                List<String> tokens = response.headers().allValues("Set-Cookie");
-                for (String token : tokens) {
-                    if (token.startsWith("folioAccessToken")) {
-                        //System.err.println("RETURNING TOKEN: " + token);
-                        return token;
+            for (int i = 0; i < 10; ++i) {
+                try (HttpClient client = HttpClient.newHttpClient()) {
+                    URI uri = new URI(folioBaseUri);
+                    uri = uri.resolve("/authn/login-with-expiry");
+                    var requestBodyMap = Map.of("tenant", folioTenant, "username", username, "password", password);
+                    String requestBody = Storage.mapper.writeValueAsString(requestBodyMap);
+
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(uri)
+                            .header("X-Okapi-Tenant", folioTenant)
+                            .header("Accept", "application/json")
+                            .header("Content-type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                            .build();
+
+                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    List<String> tokens = response.headers().allValues("Set-Cookie");
+                    for (String token : tokens) {
+                        if (token.startsWith("folioAccessToken")) {
+
+                            // We will need the token max age.
+                            String[] parts = token.split(";"); // Separate cookie parts
+                            for (int j = 0; j < parts.length; ++j) {
+                                if (parts[j].trim().startsWith("Max-Age=")) {
+                                    String maxAgeSeconds = parts[j].substring(9);
+                                    folioTokenValidUntil = Long.parseLong(maxAgeSeconds) * 1000 + System.currentTimeMillis() - 60000; // Keep a 1 minute margin
+                                }
+                            }
+
+                            folioToken = token;
+                            return folioToken;
+                        }
+                    }
+                    Storage.log("Unexpected FOLIO login response: " + response.body() + " / " + response.headers());
+                } catch (IOException | URISyntaxException | InterruptedException e) {
+                    Storage.log("No token.", e);
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e2) {
+                        // ignore
                     }
                 }
-                Storage.log("Unexpected FOLIO login response: " + response.body() + " / " + response.headers());
-            } catch (IOException | URISyntaxException | InterruptedException e) {
-                Storage.log("No token.", e);
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e2) {
-                    // ignore
-                }
             }
-        }
 
-        return null;
+            return null;
+        }
     }
 
     private static void lookupFolioHRID(Map folioRecord) {
 
-        String token = getToken(); // TEMP! REUSE! DO NOT GET A NEW ONE FOR EVERY REQUEST.
+        String token = getToken();
 
         Map instanceToBeSent = (Map) folioRecord.get("instance");
         String mainEntityUri = (String) instanceToBeSent.get("sourceUri");
@@ -143,7 +164,7 @@ public class FolioWriting {
         if (batch.isEmpty())
             return;
 
-        String token = getToken(); // TEMP! REUSE! DO NOT GET A NEW ONE FOR EVERY REQUEST.
+        String token = getToken();
 
         Map recordSet = Map.of("inventoryRecordSets", batch);
         String body = Storage.mapper.writeValueAsString(recordSet);

@@ -34,7 +34,7 @@ public class FolioWriting {
         for (int i = 0; i < 10; ++i) {
             try (HttpClient client = HttpClient.newHttpClient()) {
                 URI uri = new URI(folioBaseUri);
-                uri = uri.resolve("/authn/login");
+                uri = uri.resolve("/authn/login-with-expiry");
                 var requestBodyMap = Map.of("tenant", folioTenant, "username", username, "password", password);
                 String requestBody = Storage.mapper.writeValueAsString(requestBodyMap);
 
@@ -47,18 +47,14 @@ public class FolioWriting {
                         .build();
 
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                Map responseMap;
-                try {
-                    responseMap = Storage.mapper.readValue(response.body(), Map.class);
-                } catch (org.codehaus.jackson.JsonParseException pe) {
-                    Storage.log("Unexpected token response: " + response.body());
-                    continue;
+                List<String> tokens = response.headers().allValues("Set-Cookie");
+                for (String token : tokens) {
+                    if (token.startsWith("folioAccessToken")) {
+                        //System.err.println("RETURNING TOKEN: " + token);
+                        return token;
+                    }
                 }
-                if (responseMap.containsKey("okapiToken")) {
-                    return (String) responseMap.get("okapiToken");
-                } else {
-                    Storage.log("Unexpected FOLIO login response: " + responseMap);
-                }
+                Storage.log("Unexpected FOLIO login response: " + response.body() + " / " + response.headers());
             } catch (IOException | URISyntaxException | InterruptedException e) {
                 Storage.log("No token.", e);
                 try {
@@ -88,10 +84,10 @@ public class FolioWriting {
                         .uri(uri)
                         .header("X-Okapi-Tenant", folioTenant)
                         .header("Accept", "application/json")
-                        .header("x-okapi-token", token)
+                        // .header("x-okapi-token", token) // old style login
+                        .header("Cookie", token) // new style "rdr"-login
                         .GET()
                         .build();
-
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() != 200) {
                     Storage.log("Failed FOLIO lookup: " + response + " / " + response.body());
@@ -162,7 +158,8 @@ public class FolioWriting {
                         .header("X-Okapi-Tenant", folioTenant)
                         .header("Accept", "application/json")
                         .header("Content-type", "application/json")
-                        .header("x-okapi-token", token)
+                        // .header("x-okapi-token", token) // old style login
+                        .header("Cookie", token) // new style "rdr"-login
                         .PUT(HttpRequest.BodyPublishers.ofString(body))
                         .build();
 

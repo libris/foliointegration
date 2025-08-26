@@ -14,13 +14,6 @@ public class Storage {
         // We're getting a dump out of Libris
         INITIAL_LOAD_FROM_LIBRIS,
 
-        // We're finished downloading a dump from libris, and we're now writing that dump into
-        // folio. This does *not* happen in parallel with the above, because the dump download
-        // can fail, or be restarted before finishing, which would (if these ran in parallel)
-        // mean a broken state in folio requiring a manual clear of all folio data before being
-        // able to proceed.
-        INITIAL_LOAD_TO_FOLIO,
-
         // Libris and folio are now up to date with respect to the initial dump. In this state
         // we keep the two in sync (or catch up to a synced state if we've fallen behind) using
         // iterative updates.
@@ -61,7 +54,6 @@ public class Storage {
     public static synchronized void transitionToApplicationState(APPLICATION_STATE newState, Connection connection) {
         // The possible/allowed state transitions for this application are:
         // [null] -> "initial loading from libris"
-        // "initial loading from libris" -> "initial loading of folio"
         // "initial loading of folio" -> "staying in sync"
 
         APPLICATION_STATE currentState = getApplicationState(connection);
@@ -69,9 +61,7 @@ public class Storage {
         boolean transitionIsOk = false;
         if (currentState == null && newState == APPLICATION_STATE.INITIAL_LOAD_FROM_LIBRIS) {
             transitionIsOk = true;
-        } else if (currentState == APPLICATION_STATE.INITIAL_LOAD_FROM_LIBRIS && newState == APPLICATION_STATE.INITIAL_LOAD_TO_FOLIO) {
-            transitionIsOk = true;
-        } else if (currentState == APPLICATION_STATE.INITIAL_LOAD_TO_FOLIO && newState == APPLICATION_STATE.STAYING_IN_SYNC) {
+        } else if (currentState == APPLICATION_STATE.INITIAL_LOAD_FROM_LIBRIS && newState == APPLICATION_STATE.STAYING_IN_SYNC) {
             transitionIsOk = true;
         } else {
             logWithCallstack("ERROR: CRITICAL! State transition from " + currentState + " to " + newState + " attempted (refused). This is a BUG!");

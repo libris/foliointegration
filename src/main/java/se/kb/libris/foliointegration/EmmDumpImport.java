@@ -169,7 +169,7 @@ public class EmmDumpImport {
             } else {
                 Storage.clearState(DUMP_SIGEL_KEY, connection);
                 Storage.writeState(FolioSync.SYNCED_UNTIL_KEY, "0", connection);
-                Storage.transitionToApplicationState(Storage.APPLICATION_STATE.INITIAL_LOAD_TO_FOLIO, connection);
+                Storage.transitionToApplicationState(Storage.APPLICATION_STATE.STAYING_IN_SYNC, connection);
             }
 
             connection.commit();

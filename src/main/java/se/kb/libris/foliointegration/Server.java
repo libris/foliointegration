@@ -75,11 +75,6 @@ public class Server {
                 case INITIAL_LOAD_FROM_LIBRIS:
                     EmmDumpImport.run();
                     break;
-                case INITIAL_LOAD_TO_FOLIO:
-                    // TEMP! ACTUALLY SYNC TO FOLIO EVENTUALLY!
-                    Storage.transitionToApplicationState(Storage.APPLICATION_STATE.STAYING_IN_SYNC, connection);
-                    connection.commit();
-                    break;
                 case STAYING_IN_SYNC: {
                     boolean changesMade = false;
                     changesMade |= EmmSync.run();

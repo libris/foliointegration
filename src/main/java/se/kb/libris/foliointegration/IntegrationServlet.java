@@ -62,8 +62,6 @@ public class IntegrationServlet extends HttpServlet {
                 case INITIAL_LOAD_FROM_LIBRIS:
                     renderLibrisLoad(response.getOutputStream(), readOnlyConnection);
                     break;
-                case INITIAL_LOAD_TO_FOLIO:
-                    break;
                 case STAYING_IN_SYNC:
                     renderStayingInSync(response.getOutputStream(), readOnlyConnection);
                     break;

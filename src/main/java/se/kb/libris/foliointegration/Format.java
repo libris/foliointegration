@@ -46,7 +46,7 @@ public class Format {
 
         List<Map> allItems = getItems( (String) originalMainEntity.get("@id"), connection);
 
-        // Holdings
+        //  ----  Holdings  ----
         List<Map> holdingRecords = new ArrayList<>();
         for (Map item : allItems) {
             String holdingHrid =  item.get("@id") + (String)((Map) item.get("heldBy")).get("@id"); // TEMP
@@ -58,14 +58,27 @@ public class Format {
             holdingRecords.add(holdingRecord);
         }
 
-        // Instance
-        String title = "n/a";
+        //  ----  Instance  ----
+
+        // Titles
+        String mainTitle = "n/a";
+        List<String> alternativeTitles = new ArrayList<>();
         if (originalMainEntity.containsKey("hasTitle")) {
             List titles = (List) originalMainEntity.get("hasTitle");
             if (titles.size() > 0) {
                 Map titleEntity = (Map) titles.get(0);
                 if (titleEntity.containsKey("mainTitle"))
-                    title = (String) titleEntity.get("mainTitle");
+                    mainTitle = (String) titleEntity.get("mainTitle");
+            }
+            for (int i = 1; i < titles.size(); ++i) {
+                Map titleEntity = (Map) titles.get(i);
+                if (titleEntity.containsKey("mainTitle")) {
+                    String altTitle = (String) titleEntity.get("mainTitle");
+                    if (titleEntity.containsKey("subtitle")) {
+                        altTitle += " : " + titleEntity.get("subtitle");
+                    }
+                    alternativeTitles.add(altTitle);
+                }
             }
         }
         String hrid = (String) originalMainEntity.get("@id"); // This HRID will be looked up and replaced by the folio writing code before actual writing.
@@ -75,7 +88,8 @@ public class Format {
         instance.put("source", "LIBRIS");
         instance.put("hrid", hrid);
         instance.put("instanceTypeId", "30fffe0e-e985-4144-b2e2-1e8179bdb41f"); // = "unspecified" - for now.
-        instance.put("title", title);
+        instance.put("title", mainTitle);
+        instance.put("indexTitle", mainTitle);
         instance.put("sourceUri", originalMainEntity.get("@id"));
         Map converted = new HashMap();
         converted.put("instance", instance);

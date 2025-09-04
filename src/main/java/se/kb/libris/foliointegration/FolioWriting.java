@@ -89,33 +89,58 @@ public class FolioWriting {
         }
     }
 
-    private static void lookupFolioHRID(Map folioRecord) {
-
+    public static String getFromFolio(String pathAndParameters) throws IOException {
         String token = getToken();
 
-        Map instanceToBeSent = (Map) folioRecord.get("instance");
-        String mainEntityUri = (String) instanceToBeSent.get("sourceUri");
-
-        while (true) {
+        for (int i = 0; i < 20; ++i) {
             try (HttpClient client = HttpClient.newHttpClient()) {
                 URI uri = new URI(folioBaseUri);
-                uri = uri.resolve("/inventory/instances?query=sourceUri==" + URLEncoder.encode("\"" + mainEntityUri + "\"", StandardCharsets.UTF_8));
+                uri = uri.resolve(pathAndParameters);
 
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(uri)
                         .header("X-Okapi-Tenant", folioTenant)
                         .header("Accept", "application/json")
-                        // .header("x-okapi-token", token) // old style login
-                        .header("Cookie", token) // new style "rdr"-login
+                        .header("Cookie", token)
                         .GET()
                         .build();
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() != 200) {
                     Storage.log("Failed FOLIO lookup: " + response + " / " + response.body());
+                    return null;
+                }
+                return response.body();
+
+            } catch (IOException | URISyntaxException | InterruptedException e) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e2) {
+                    // ignore
+                }
+                Storage.log("Retrying Folio lookup for: " + pathAndParameters);
+            }
+        }
+        throw new IOException("Unable to complete request: " + pathAndParameters);
+    }
+
+    private static void lookupFolioHRID(Map folioRecord) {
+
+        // Have to retry forever, because the alternative (to not getting a definitive answer)
+        // is creating a double record.
+        while (true) {
+
+            try {
+                Map instanceToBeSent = (Map) folioRecord.get("instance");
+                String mainEntityUri = (String) instanceToBeSent.get("sourceUri");
+                String pathAndParameters = "/inventory/instances?query=sourceUri==" + URLEncoder.encode("\"" + mainEntityUri + "\"", StandardCharsets.UTF_8);
+                String response = getFromFolio(pathAndParameters);
+
+                if (response == null) {
+                    // NO HRID OBATINED FROM FOLIO, NEED A NEW ONE MINTED HERE!
                     return;
                 }
 
-                Map responseMap = Storage.mapper.readValue(response.body(), Map.class);
+                Map responseMap = Storage.mapper.readValue(response, Map.class);
                 if (responseMap.containsKey("instances")) {
                     List instances = (List) responseMap.get("instances");
                     if (!instances.isEmpty()) {
@@ -125,18 +150,15 @@ public class FolioWriting {
                             instanceToBeSent.put("hrid", instanceFromFolio.get("hrid"));
                             return;
                         }
-                    } else {
-                        // NO HRID OBATINED FROM FOLIO, NEED A NEW ONE!
-                        return;
                     }
                 }
-            } catch (IOException | URISyntaxException | InterruptedException e) {
+            } catch (IOException ioe) {
+                Storage.log("Failed HRID lookup, will retry later.", ioe);
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e2) {
                     // ignore
                 }
-                Storage.log("Retrying HRID lookup for: " + mainEntityUri);
             }
         }
     }
@@ -163,6 +185,16 @@ public class FolioWriting {
 
         if (batch.isEmpty())
             return;
+
+
+        // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
+        /*
+        if (1 == 1) {
+            batch.clear();
+            return;
+        }*/
+        // REMOVE THIS
+
 
         String token = getToken();
 

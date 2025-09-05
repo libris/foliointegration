@@ -36,7 +36,7 @@ public class EmmSync {
             newUntilTarget = now;
 
         try (HttpClient client = HttpClient.newHttpClient()) {
-            URI uri = new URI(System.getenv("EMMBASEURL")).resolve("?until=" + newUntilTarget);
+            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("?until=" + newUntilTarget);
             boolean foundAlreadyTakenChange = false;
             while (uri != null) {
                 HttpRequest request = HttpRequest.newBuilder()

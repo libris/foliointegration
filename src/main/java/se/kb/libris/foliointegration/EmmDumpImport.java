@@ -50,7 +50,7 @@ public class EmmDumpImport {
         connection.commit();
 
         try {
-            URI uri = new URI(System.getenv("EMMBASEURL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
             while (uri != null) {
                 Map<String, ?> responseMap = getPage(Integer.parseInt(offset));
 
@@ -184,7 +184,7 @@ public class EmmDumpImport {
      */
     private static void prefetchPage(int offset) {
         try {
-            URI uri = new URI(System.getenv("EMMBASEURL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
 
             // Place an empty map with this key when starting. This will be a signal that the page is already being
             // downloaded, and should be waited for rather than re-downloaded.
@@ -220,7 +220,7 @@ public class EmmDumpImport {
         }
 
         try {
-            URI uri = new URI(System.getenv("EMMBASEURL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
 
             var emptyMap = new HashMap<>();
             var page = prefetchedPages.get(uri.toString());
@@ -240,7 +240,7 @@ public class EmmDumpImport {
     private static void startIfNotStarted() throws SQLException{
         try (HttpClient client = HttpClient.newHttpClient()) {
 
-            URI uri = new URI(System.getenv("EMMBASEURL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=0");
+            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=0");
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(uri)
                     .GET()

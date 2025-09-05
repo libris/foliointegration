@@ -34,7 +34,7 @@ public class Format {
                 instanceTypeToGuid.put((String)instanceType.get("name"), (String)instanceType.get("id"));
             }
 
-            System.err.println(instanceTypeToGuid);
+            //System.err.println(sourcessResponse);
 
 
         } catch (IOException ioe) {
@@ -93,7 +93,8 @@ public class Format {
 
             Map holdingRecord = Map.of(
                     "permanentLocationId", "b3826b33-be3b-49bd-b954-4b57bf84e70f", // TEMP MAKE CONFIGURABLE
-                    "sourceId", "912ecb39-c577-4596-ad4b-0ed8dedc3a33", // TEMP MAKE CONFIGURABLE
+                    //"sourceId", "912ecb39-c577-4596-ad4b-0ed8dedc3a33", // TEMP
+                    "sourceId", System.getenv("SOURCE_GUID"),
                     "hrid", holdingHrid,
                     "items", folioItems);
             holdingRecords.add(holdingRecord);

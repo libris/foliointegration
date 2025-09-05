@@ -7,7 +7,6 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,8 +26,8 @@ public class FolioWriting {
     private static String folioToken = null;
 
     static {
-        username = System.getenv("FOLIOUSER");
-        password = System.getenv("FOLIOPASS");
+        username = System.getenv("FOLIO_USER");
+        password = System.getenv("FOLIO_PASS");
         folioBaseUri = System.getenv("OKAPI_URL");
         folioTenant = System.getenv("OKAPI_TENANT");
     }
@@ -137,6 +136,7 @@ public class FolioWriting {
 
                 if (response == null) {
                     // NO HRID OBATINED FROM FOLIO, NEED A NEW ONE MINTED HERE!
+                    Storage.log("Need to mint a new folio ID!");
                     return;
                 }
 
@@ -144,7 +144,7 @@ public class FolioWriting {
                 if (responseMap.containsKey("instances")) {
                     List instances = (List) responseMap.get("instances");
                     if (!instances.isEmpty()) {
-                        Map instanceFromFolio = (Map) instances.get(0); // There should never be more than one instance having this specifik ID
+                        Map instanceFromFolio = (Map) instances.get(0); // There should never be more than one instance having this specific ID
                         if (instanceFromFolio.containsKey("hrid")) {
                             //Storage.log("Replaced outgoing HRID: " + instanceFromFolio.get("hrid"));
                             instanceToBeSent.put("hrid", instanceFromFolio.get("hrid"));
@@ -188,8 +188,7 @@ public class FolioWriting {
 
 
         // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
-        /*
-        if (1 == 1) {
+        /*if (1 == 1) {
             batch.clear();
             return;
         }*/

@@ -134,11 +134,8 @@ public class FolioWriting {
                 String pathAndParameters = "/inventory/instances?query=sourceUri==" + URLEncoder.encode("\"" + mainEntityUri + "\"", StandardCharsets.UTF_8);
                 String response = getFromFolio(pathAndParameters);
 
-                if (response == null) {
-                    // NO HRID OBATINED FROM FOLIO, NEED A NEW ONE MINTED HERE!
-                    Storage.log("Need to mint a new folio ID!");
-                    return;
-                }
+                if (response == null)
+                    continue;
 
                 Map responseMap = Storage.mapper.readValue(response, Map.class);
                 if (responseMap.containsKey("instances")) {
@@ -150,6 +147,10 @@ public class FolioWriting {
                             instanceToBeSent.put("hrid", instanceFromFolio.get("hrid"));
                             return;
                         }
+                    } else {
+                        // NO HRID OBATINED FROM FOLIO, NEED A NEW ONE MINTED HERE!
+                        Storage.log("Need to mint a new folio ID!");
+                        return;
                     }
                 }
             } catch (IOException ioe) {
@@ -160,6 +161,7 @@ public class FolioWriting {
                     // ignore
                 }
             }
+            System.err.println("Retrying HRID...");
         }
     }
 

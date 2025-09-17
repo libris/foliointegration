@@ -7,11 +7,12 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.time.Instant;
+import java.time.*;
 
 public class IntegrationServlet extends HttpServlet {
 
@@ -33,8 +34,47 @@ public class IntegrationServlet extends HttpServlet {
                         </html>
                         """.stripIndent();
 
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        response.setStatus(200);
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
+
+        switch (request.getServletPath()) {
+            case "/emmtime": {
+                String line = request.getReader().readLine();
+                if (!line.startsWith("emmtime=")) {
+                    Storage.log("Suspicious POST to " + request.getServletPath() + " (ignoring).");
+                    break;
+                }
+                String timeLine = URLDecoder.decode(line.substring(8));
+                LocalDateTime time = LocalDateTime.parse(timeLine);
+                Server.requestChangedEmmTime( time.toInstant(ZoneId.of("Europe/Stockholm").getRules().getOffset(LocalDateTime.now())).toEpochMilli() );
+                // Now WAIT for the change to take effect before redirecting back to render the page.
+                while (Server.getRequestedNewEmmTime() != 0) {
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {/* ignore */}
+                }
+                break;
+            }
+            case "/foliotime": {
+                String line = request.getReader().readLine();
+                if (!line.startsWith("foliotime=")) {
+                    Storage.log("Suspicious POST to " + request.getServletPath() + " (ignoring).");
+                    break;
+                }
+                String timeLine = URLDecoder.decode(line.substring(10));
+                LocalDateTime time = LocalDateTime.parse(timeLine);
+                Server.requestChangedFolioTime( time.toInstant(ZoneId.of("Europe/Stockholm").getRules().getOffset(LocalDateTime.now())).toEpochMilli() );
+                // Now WAIT for the change to take effect before redirecting back to render the page.
+                while (Server.getRequestedNewFolioTime() != 0) {
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {/* ignore */}
+                }
+                break;
+            }
+            default:
+                Storage.log("Suspicious POST to " + request.getServletPath() + " (ignoring).");
+        }
+        response.sendRedirect("/");
     }
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -86,6 +126,15 @@ public class IntegrationServlet extends HttpServlet {
                 long secondDiff = (now - syncedUntil) / 1000;
                 String s = "<br/>EMM synced until: " + syncedUntil + ". Meaning " + secondDiff + " seconds behind. <br/><br/>";
                 os.write(s.getBytes(StandardCharsets.UTF_8));
+
+                s = """
+                        <form action="/emmtime" method="post">
+                            <label for="emmtime">Reset sync FROM LIBRIS to [everything that changed since] (swedish local time):</lable>
+                            <input id="emmtime" name="emmtime" type="datetime-local"></input>
+                            <input type="submit" value="Set time">
+                        </form>
+                        """.stripIndent();
+                os.write(s.getBytes(StandardCharsets.UTF_8));
             } else {
                 String s = "<br/>Odd EMM sync state. Shouldn't happen.<br/>";
                 os.write(s.getBytes(StandardCharsets.UTF_8));
@@ -99,7 +148,16 @@ public class IntegrationServlet extends HttpServlet {
                 long syncedUntil = Long.parseLong(untilString);
                 long now = Instant.now().toEpochMilli();
                 long secondDiff = (now - syncedUntil) / 1000;
-                String s = "<br/>FOLIO synced until: " + syncedUntil + ". Meaning " + secondDiff + " seconds behind (or up-to-date if there are no more recent changes). <br/><br/>";
+                String s = "<hr><br/>FOLIO synced until: " + syncedUntil + ". Meaning " + secondDiff + " seconds behind (or up-to-date if there are no more recent changes). <br/><br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+
+                s = """
+                        <form action="/foliotime" method="post">
+                            <label for="foliotime">Reset sync TO FOLIO to [everything that changed since] (swedish local time):</lable>
+                            <input id="foliotime" name="foliotime" type="datetime-local"></input>
+                            <input type="submit" value="Set time">
+                        </form>
+                        """.stripIndent();
                 os.write(s.getBytes(StandardCharsets.UTF_8));
             } else {
                 String s = "<br/>Odd FOLIO sync state. Shouldn't happen.<br/>";

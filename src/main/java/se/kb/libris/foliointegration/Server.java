@@ -37,9 +37,26 @@ public class Server {
         return server;
     }
 
-    public static void main(String[] args) throws Exception {
+    // The point of this, is to be able to request the changing of these times
+    // from another thread (typically the servlet/gui thread), as other threads than
+    // this main one are not allowed to write into the database. We do not want to worry
+    // about concurrency with sqlite.
+    private static long requestedNewEmmTime = 0;
+    private static long requestedNewFolioTime = 0;
+    public static synchronized void requestChangedEmmTime(long newTime) {
+        requestedNewEmmTime = newTime;
+    }
+    public static synchronized void requestChangedFolioTime(long newTime) {
+        requestedNewFolioTime = newTime;
+    }
+    public static synchronized long getRequestedNewEmmTime() {
+        return requestedNewEmmTime;
+    }
+    public static synchronized long getRequestedNewFolioTime() {
+        return requestedNewFolioTime;
+    }
 
-        //FolioWriting.testWrite();
+    public static void main(String[] args) throws Exception {
 
         var server = createServer();
         ServletContextHandler context = new ServletContextHandler();
@@ -76,6 +93,21 @@ public class Server {
                     EmmDumpImport.run();
                     break;
                 case STAYING_IN_SYNC: {
+
+                    // synchronized with the requestChanged*Time-stuff above
+                    synchronized (Server.class) {
+                        if (requestedNewEmmTime != 0) {
+                            Storage.writeState(EmmSync.SYNCED_UNTIL_KEY, "" + requestedNewEmmTime, connection);
+                            Storage.log("EMM sync time MANUALLY changed to: " + requestedNewEmmTime);
+                            requestedNewEmmTime = 0;
+                        }
+                        if (requestedNewFolioTime != 0) {
+                            Storage.writeState(FolioSync.SYNCED_UNTIL_KEY, "" + requestedNewFolioTime, connection);
+                            Storage.log("FOLIO sync time MANUALLY changed to: " + requestedNewFolioTime);
+                            requestedNewFolioTime = 0;
+                        }
+                    }
+
                     boolean changesMade = false;
                     changesMade |= EmmSync.run();
                     FolioSync.run();

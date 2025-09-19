@@ -1,5 +1,11 @@
 package se.kb.libris.foliointegration;
 
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.util.TimeValue;
+import org.apache.hc.core5.util.Timeout;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -7,13 +13,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-
 
 public class EmmDumpImport {
 
@@ -79,6 +83,8 @@ public class EmmDumpImport {
 
                         List<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
                         Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
+
+                        //dependencies.addAll(Records.downloadDependencies(dependenciesToDownload));
                         Thread t = Thread.startVirtualThread(() -> dependencies.addAll(Records.downloadDependencies(dependenciesToDownload)));
                         threads.add(t);
                     }
@@ -194,16 +200,24 @@ public class EmmDumpImport {
 
             Thread.ofPlatform().name("EMM prefetch").start(new Runnable() {
                 public void run() {
-                    try (HttpClient client = HttpClient.newHttpClient()) {
-                    HttpRequest request = HttpRequest.newBuilder()
-                            .uri(uri)
-                            .GET()
-                            .build();
-                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                    prefetchedPages.put( uri.toString(), Storage.mapper.readValue(response.body(), Map.class) );
-                    } catch (IOException | InterruptedException e) {
-                        prefetchedPages.remove(uri.toString());
-                        Storage.log("Page prefetch failed.", e);
+                    try {
+                        HttpGet request = new HttpGet(uri);
+                        RequestConfig config = RequestConfig.custom()
+                                .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+
+                        request.setConfig(config);
+                        request.setHeader("accept", "application/json+ld");
+                        Server.httpClient.execute(request, response -> {
+                            String bodyAsString = EntityUtils.toString(response.getEntity());
+                            prefetchedPages.put( uri.toString(), Storage.mapper.readValue(bodyAsString, Map.class) );
+                            return response;
+                        });
+                    } catch (IOException e) {
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e2) {
+                            // ignore
+                        }
                     }
                 }
             });
@@ -244,6 +258,7 @@ public class EmmDumpImport {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(uri)
                     .GET()
+                    .timeout(Duration.ofSeconds(10))
                     .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());

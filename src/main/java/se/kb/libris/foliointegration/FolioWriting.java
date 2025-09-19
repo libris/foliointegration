@@ -1,5 +1,16 @@
 package se.kb.libris.foliointegration;
 
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.ProtocolException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.hc.core5.util.TimeValue;
+import org.apache.hc.core5.util.Timeout;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -8,10 +19,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class FolioWriting {
     private static final String username;
@@ -47,21 +55,24 @@ public class FolioWriting {
                     var requestBodyMap = Map.of("tenant", folioTenant, "username", username, "password", password);
                     String requestBody = Storage.mapper.writeValueAsString(requestBodyMap);
 
-                    HttpRequest request = HttpRequest.newBuilder()
-                            .uri(uri)
-                            .header("X-Okapi-Tenant", folioTenant)
-                            .header("Accept", "application/json")
-                            .header("Content-type", "application/json")
-                            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                            .build();
+                    HttpPost request = new HttpPost(uri);
+                    RequestConfig config = RequestConfig.custom()
+                            .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                    request.setConfig(config);
+                    request.setHeader("X-Okapi-Tenant", folioTenant);
+                    request.setHeader("Accept", "application/json");
+                    request.setHeader("Content-type", "application/json");
 
-                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                    List<String> tokens = response.headers().allValues("Set-Cookie");
-                    for (String token : tokens) {
-                        if (token.startsWith("folioAccessToken")) {
+                    StringEntity entity = new StringEntity(requestBody);
+                    request.setEntity(entity);
+
+                    ClassicHttpResponse response = Server.httpClient.execute(request);
+                    Header[] headers = response.getHeaders();
+                    for (Header header : headers) {
+                        if (header.getValue().startsWith("folioAccessToken")) {
 
                             // We will need the token max age.
-                            String[] parts = token.split(";"); // Separate cookie parts
+                            String[] parts = header.getValue().split(";"); // Separate cookie parts
                             for (int j = 0; j < parts.length; ++j) {
                                 if (parts[j].trim().startsWith("Max-Age=")) {
                                     String maxAgeSeconds = parts[j].substring(9);
@@ -69,12 +80,13 @@ public class FolioWriting {
                                 }
                             }
 
-                            folioToken = token;
+                            folioToken = header.getValue();
                             return folioToken;
                         }
                     }
-                    Storage.log("Unexpected FOLIO login response: " + response.body() + " / " + response.headers());
-                } catch (IOException | URISyntaxException | InterruptedException e) {
+
+                    Storage.log("Unexpected FOLIO login response: " + EntityUtils.toString(response.getEntity()) + " / " + Arrays.toString(response.getHeaders()));
+                } catch (IOException | URISyntaxException | ProtocolException e) {
                     Storage.log("No token.", e);
                     try {
                         Thread.sleep(1000);

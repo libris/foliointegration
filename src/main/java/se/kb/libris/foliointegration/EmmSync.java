@@ -1,5 +1,13 @@
 package se.kb.libris.foliointegration;
 
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.util.TimeValue;
+import org.apache.hc.core5.util.Timeout;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -35,16 +43,18 @@ public class EmmSync {
         if (newUntilTarget > now)
             newUntilTarget = now;
 
-        try (HttpClient client = HttpClient.newHttpClient()) {
+        try {
             URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("?until=" + newUntilTarget);
             boolean foundAlreadyTakenChange = false;
             while (uri != null) {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(uri)
-                        .GET()
-                        .build();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                Map responseMap = Storage.mapper.readValue(response.body(), Map.class);
+
+                HttpGet request = new HttpGet(uri);
+                RequestConfig config = RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                request.setConfig(config);
+                request.setHeader("accept", "application/json+ld");
+                ClassicHttpResponse response = Server.httpClient.execute(request);
+                Map responseMap = Storage.mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
 
                 List<Map<String,?>> items = ((List<Map<String,?>>) responseMap.get("orderedItems"));
                 for (Map<String, ?> item : items) {
@@ -78,7 +88,7 @@ public class EmmSync {
                 }
             }
 
-        } catch (URISyntaxException | IOException | InterruptedException | SQLException e) {
+        } catch (URISyntaxException | IOException | SQLException | ParseException e) {
             Storage.log("Sync iteration failed.", e);
             try {
                 connection.rollback();

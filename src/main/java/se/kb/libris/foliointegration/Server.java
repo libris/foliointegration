@@ -1,5 +1,7 @@
 package se.kb.libris.foliointegration;
 
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee8.servlet.ServletHolder;
 import org.eclipse.jetty.server.*;
@@ -55,6 +57,9 @@ public class Server {
     public static synchronized long getRequestedNewFolioTime() {
         return requestedNewFolioTime;
     }
+
+    //public static HttpClient httpClient = new HttpClient();
+    public static CloseableHttpClient httpClient = HttpClientBuilder.create().build();
 
     public static void main(String[] args) throws Exception {
 

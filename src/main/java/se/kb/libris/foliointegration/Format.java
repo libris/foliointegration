@@ -92,7 +92,7 @@ public class Format {
             }
 
             Map holdingRecord = Map.of(
-                    "permanentLocationId", "b3826b33-be3b-49bd-b954-4b57bf84e70f", // TEMP MAKE CONFIGURABLE
+                    "permanentLocationId", "57246b20-76a7-4725-91c7-dea9f336de4f", // TEMP MAKE CONFIGURABLE
                     //"sourceId", "912ecb39-c577-4596-ad4b-0ed8dedc3a33", // TEMP
                     "sourceId", System.getenv("SOURCE_GUID"),
                     "hrid", holdingHrid,
@@ -137,7 +137,8 @@ public class Format {
         instance.put("sourceUri", originalMainEntity.get("@id"));
         Map converted = new HashMap();
         converted.put("instance", instance);
-        converted.put("holdingsRecords", holdingRecords);
+        //converted.put("holdingsRecords", holdingRecords);
+        converted.put("holdingsRecords", new ArrayList<Map>()); // TEMP
 
         return converted;
     }

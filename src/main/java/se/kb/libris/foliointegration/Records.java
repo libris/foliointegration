@@ -1,5 +1,13 @@
 package se.kb.libris.foliointegration;
 
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.util.TimeValue;
+import org.apache.hc.core5.util.Timeout;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -175,15 +183,16 @@ public class Records {
 
     public static String downloadJsonLdWithRetry(String uri) {
         for (int i = 0; i < 5; ++i) {
-            try (HttpClient client = HttpClient.newHttpClient()) {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(new URI(uri))
-                        .header("accept", "application/json+ld")
-                        .GET()
-                        .build();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                return response.body();
-            } catch (IOException | URISyntaxException | InterruptedException e) {
+            try {
+                HttpGet request = new HttpGet(uri);
+                RequestConfig config = RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                request.setConfig(config);
+                request.setHeader("accept", "application/json+ld");
+                ClassicHttpResponse response = Server.httpClient.execute(request);
+                return EntityUtils.toString(response.getEntity());
+
+            } catch (IOException | ParseException e) {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e2) {

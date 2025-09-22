@@ -42,7 +42,7 @@ public class EmmSync {
         long now = new Date().toInstant().toEpochMilli();
         if (newUntilTarget > now)
             newUntilTarget = now;
-
+        
         try {
             URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("?until=" + newUntilTarget);
             boolean foundAlreadyTakenChange = false;
@@ -54,7 +54,8 @@ public class EmmSync {
                 request.setConfig(config);
                 request.setHeader("accept", "application/json+ld");
                 ClassicHttpResponse response = Server.httpClient.execute(request);
-                Map responseMap = Storage.mapper.readValue(EntityUtils.toString(response.getEntity()), Map.class);
+                String responseString = EntityUtils.toString(response.getEntity());
+                Map responseMap = Storage.mapper.readValue(responseString, Map.class);
 
                 List<Map<String,?>> items = ((List<Map<String,?>>) responseMap.get("orderedItems"));
                 for (Map<String, ?> item : items) {
@@ -116,10 +117,11 @@ public class EmmSync {
                         if (record.containsKey("@graph")) {
                             List<Map> graphList = (List<Map>) record.get("@graph");
 
-                            List<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
+                            Set<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
                             Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
                             List<Map> dependencies = Records.downloadDependencies(dependenciesToDownload);
                             Records.writeRecord(graphList.get(1), connection);
+
                             for (Map dependency : dependencies) {
                                 Records.writeRecord(dependency, connection);
                             }

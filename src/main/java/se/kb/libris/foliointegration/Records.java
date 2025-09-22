@@ -58,7 +58,7 @@ public class Records {
             }
 
             // Write all URIs that the entity refers to (except itself)
-            List<String> uris = collectUrisReferencedByThisRecord( mainEntity );
+            Set<String> uris = collectUrisReferencedByThisRecord( mainEntity );
             for (String uri : uris) {
                 if (!uri.equals(mainEntityId)) {
                     try (PreparedStatement statement = connection.prepareStatement("INSERT INTO referenced_uris(entity_id, referenced_uri) VALUES(?, ?)")) {
@@ -75,8 +75,8 @@ public class Records {
         }
     }
 
-    public static List<String> collectUrisReferencedByThisRecord(Object node) {
-        var result = new ArrayList<String>();
+    public static Set<String> collectUrisReferencedByThisRecord(Object node) {
+        var result = new HashSet<String>();
 
         switch (node) {
             case List l: {
@@ -104,7 +104,7 @@ public class Records {
         return result;
     }
 
-    public static void filterUrisWeAlreadyHave(List<String> uris, Connection connection) throws SQLException {
+    public static void filterUrisWeAlreadyHave(Set<String> uris, Connection connection) throws SQLException {
         var it = uris.iterator();
         while (it.hasNext()) {
             String dependencyToDownload = it.next();
@@ -158,7 +158,7 @@ public class Records {
         }
     }
 
-    public static List<Map> downloadDependencies(List<String> uris) {
+    public static List<Map> downloadDependencies(Set<String> uris) {
         var result = new ArrayList<Map>();
 
         for (String uri : uris) {

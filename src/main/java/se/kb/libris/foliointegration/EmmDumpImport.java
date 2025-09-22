@@ -81,7 +81,7 @@ public class EmmDumpImport {
                         Map<String, Object> itemMap = (Map<String, Object>) item;
                         List<?> graphList = (List<?>) itemMap.get("@graph");
 
-                        List<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
+                        Set<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
                         Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
 
                         //dependencies.addAll(Records.downloadDependencies(dependenciesToDownload));

@@ -2,9 +2,11 @@ package se.kb.libris.foliointegration;
 
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.classic.methods.HttpPut;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.ProtocolException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
@@ -15,9 +17,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -49,7 +48,7 @@ public class FolioWriting {
                 return folioToken;
 
             for (int i = 0; i < 10; ++i) {
-                try (HttpClient client = HttpClient.newHttpClient()) {
+                try {
                     URI uri = new URI(folioBaseUri);
                     uri = uri.resolve("/authn/login-with-expiry");
                     var requestBodyMap = Map.of("tenant", folioTenant, "username", username, "password", password);
@@ -104,25 +103,28 @@ public class FolioWriting {
         String token = getToken();
 
         for (int i = 0; i < 20; ++i) {
-            try (HttpClient client = HttpClient.newHttpClient()) {
+            try {
+
                 URI uri = new URI(folioBaseUri);
                 uri = uri.resolve(pathAndParameters);
+                HttpGet request = new HttpGet(uri);
+                RequestConfig config = RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                request.setConfig(config);
 
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(uri)
-                        .header("X-Okapi-Tenant", folioTenant)
-                        .header("Accept", "application/json")
-                        .header("Cookie", token)
-                        .GET()
-                        .build();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() != 200) {
-                    Storage.log("Failed FOLIO lookup: " + response + " / " + response.body());
+                request.setHeader("X-Okapi-Tenant", folioTenant);
+                request.setHeader("Accept", "application/json");
+                request.setHeader("Cookie", token);
+
+                ClassicHttpResponse response = Server.httpClient.execute(request);
+                String responseText = EntityUtils.toString(response.getEntity());
+
+                if (response.getCode() != 200) {
+                    Storage.log("Failed FOLIO lookup: " + response);
                     return null;
                 }
-                return response.body();
-
-            } catch (IOException | URISyntaxException | InterruptedException e) {
+                return responseText;
+            } catch (IOException | URISyntaxException | ParseException e) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e2) {
@@ -215,31 +217,35 @@ public class FolioWriting {
         String body = Storage.mapper.writeValueAsString(recordSet);
 
         for (int i = 0; i < 10; ++i) {
-            try (HttpClient client = HttpClient.newHttpClient()) {
+            try {
                 URI uri = new URI(folioBaseUri);
                 uri = uri.resolve("/inventory-batch-upsert-hrid");
+                HttpPut request = new HttpPut(uri);
+                RequestConfig config = RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                request.setConfig(config);
 
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(uri)
-                        .header("X-Okapi-Tenant", folioTenant)
-                        .header("Accept", "application/json")
-                        .header("Content-type", "application/json")
-                        // .header("x-okapi-token", token) // old style login
-                        .header("Cookie", token) // new style "rdr"-login
-                        .PUT(HttpRequest.BodyPublishers.ofString(body))
-                        .build();
+                StringEntity entity = new StringEntity(body);
+                request.setEntity(entity);
 
-                //System.err.println("SENDING UPSERT: " + uri.toString());
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() != 200) {
-                    Storage.log("Failed FOLIO write: " + response + " / " + response.body());
+                request.setHeader("X-Okapi-Tenant", folioTenant);
+                request.setHeader("Accept", "application/json");
+                request.setHeader("Content-type", "application/json");
+                request.setHeader("Cookie", token);
+
+                ClassicHttpResponse response = Server.httpClient.execute(request);
+                String responseText = EntityUtils.toString(response.getEntity());
+
+                if (response.getCode() != 200) {
+                    Storage.log("Failed FOLIO write: " + response + " / " + responseText);
                     continue;
                 }
+
                 // IF OK
                 Storage.log("Synced " + batch.size() + " records to FOLIO.");
                 batch.clear();
                 return;
-            } catch (IOException | URISyntaxException | InterruptedException e) {
+            } catch (IOException | URISyntaxException | ParseException e) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e2) {

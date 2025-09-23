@@ -2,6 +2,8 @@ package se.kb.libris.foliointegration;
 
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
@@ -9,12 +11,8 @@ import org.apache.hc.core5.util.Timeout;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -252,17 +250,17 @@ public class EmmDumpImport {
     }
 
     private static void startIfNotStarted() throws SQLException{
-        try (HttpClient client = HttpClient.newHttpClient()) {
-
+        try {
             URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=0");
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(uri)
-                    .GET()
-                    .timeout(Duration.ofSeconds(10))
-                    .build();
+            HttpGet request = new HttpGet(uri);
+            RequestConfig config = RequestConfig.custom()
+                    .setConnectionRequestTimeout(Timeout.ofSeconds(15)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+            request.setConfig(config);
+            request.setHeader("accept", "application/json+ld");
+            ClassicHttpResponse response = Server.httpClient.execute(request);
+            String responseText = EntityUtils.toString(response.getEntity());
+            Map<?, ?> responseMap = Storage.mapper.readValue(responseText, Map.class);
 
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            Map<?, ?> responseMap = Storage.mapper.readValue(response.body(), Map.class);
             if (responseMap.containsKey("startTime")) {
                 String startTime = (String) responseMap.get("startTime");
                 ZonedDateTime.parse(startTime); // parses correctly or throws
@@ -281,7 +279,7 @@ public class EmmDumpImport {
                 connection.commit();
             }
 
-        } catch (URISyntaxException | IOException | InterruptedException e) {
+        } catch (URISyntaxException | IOException | ParseException e) {
             Storage.log("Failed to start dump download.", e);
         }
     }

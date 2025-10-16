@@ -38,9 +38,10 @@ public class EmmSync {
         long now = new Date().toInstant().toEpochMilli();
         if (newUntilTarget > now)
             newUntilTarget = now;
-        
+
+        URI uri = null;
         try {
-            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("?until=" + newUntilTarget);
+            uri = new URI(System.getenv("EMM_BASE_URL")).resolve("?until=" + newUntilTarget);
             boolean foundAlreadyTakenChange = false;
             while (uri != null) {
 
@@ -86,7 +87,7 @@ public class EmmSync {
             }
 
         } catch (URISyntaxException | IOException | SQLException | ParseException e) {
-            Storage.log("Sync iteration failed.", e);
+            Storage.log("Sync iteration request failed. (" + uri.toString() + ")", e);
             try {
                 connection.rollback();
             } catch (SQLException se) {

@@ -3,6 +3,7 @@ package se.kb.libris.foliointegration;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.util.TimeValue;
@@ -168,7 +169,7 @@ public class Records {
                         result.add(graphList.get(1));
                     }
                 } catch (IOException ioe) {
-                    Storage.log("Could not handle expected JSON.", ioe);
+                    Storage.log("Could not handle expected JSON from: " + uri + " [which looks like]: " + response, ioe);
                 }
             }
         }
@@ -185,7 +186,19 @@ public class Records {
                 request.setConfig(config);
                 request.setHeader("accept", "application/json+ld");
                 ClassicHttpResponse response = Server.httpClient.execute(request);
-                return EntityUtils.toString(response.getEntity());
+
+                boolean isJsonld = false;
+                for (Header header : response.getHeaders("Content-Type")) {
+                    if (header.getValue().contains("application/ld+json"))
+                        isJsonld = true;
+                }
+
+                if (isJsonld)
+                    return EntityUtils.toString(response.getEntity());
+                else {
+                    Storage.log("Asked for JSONLD on " + uri + " but got other content-type anyway.");
+                    return null;
+                }
 
             } catch (IOException | ParseException e) {
                 try {

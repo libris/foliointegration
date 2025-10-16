@@ -162,8 +162,8 @@ public class FolioWriting {
                             return;
                         }
                     } else {
-                        // NO HRID OBATINED FROM FOLIO, NEED A NEW ONE MINTED HERE!
-                        Storage.log("Need to mint a new folio ID!");
+                        // NO HRID OBATINED FROM FOLIO, LEAVE THE CONTROLNUMBER AS IS!
+                        Storage.log("Minting a new folio ID: " + instanceToBeSent.get("hrid"));
                         return;
                     }
                 }

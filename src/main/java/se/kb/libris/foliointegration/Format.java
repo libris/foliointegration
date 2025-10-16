@@ -123,7 +123,9 @@ public class Format {
                 }
             }
         }
-        String hrid = (String) originalMainEntity.get("@id"); // This HRID will be looked up and replaced by the folio writing code before actual writing.
+
+        Map meta = (Map) originalMainEntity.get("meta");
+        String hrid = (String) meta.get("controlNumber"); // This HRID may be looked up and replaced by the folio writing code before actual writing.
 
         String instanceTypeId = instanceTypeToGuid.get("unspecified"); // for now, match actual types later.
 

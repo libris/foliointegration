@@ -80,6 +80,13 @@ public class EmmDumpImport {
                         List<?> graphList = (List<?>) itemMap.get("@graph");
 
                         Set<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
+
+                        // We do NOT want to download the instance again, even though it is referenced. We have it already.
+                        Map mainEntity = (Map) graphList.get(1);
+                        Map itemOf = (Map) mainEntity.get("itemOf");
+                        String instanceUri = (String) itemOf.get("@id");
+                        dependenciesToDownload.remove(instanceUri);
+
                         Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
 
                         //dependencies.addAll(Records.downloadDependencies(dependenciesToDownload));
@@ -103,8 +110,6 @@ public class EmmDumpImport {
                             Map itemOf = (Map) mainEntity.get("itemOf");
                             String instanceUri = (String) itemOf.get("@id");
                             mainEntity.put("itemOf", instanceUri);
-
-                            //Map<String, ?> mainEntity = (Map<String, ?>) graphList.get(1);
 
                             Records.writeRecord(mainEntity, connection);
                             Records.writeRecord(itemOf, connection);

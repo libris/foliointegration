@@ -117,7 +117,13 @@ public class EmmSync {
                             Set<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
                             Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
                             List<Map> dependencies = Records.downloadDependencies(dependenciesToDownload);
-                            Records.writeRecord(graphList.get(1), connection);
+
+                            Map mainEntity = graphList.get(1);
+                            Map recordEntity = graphList.get(0);
+                            String controlNumber = (String) recordEntity.get("controlNumber");
+                            mainEntity.put( "meta", Map.of("controlNumber", controlNumber) );
+
+                            Records.writeRecord(mainEntity, connection);
 
                             for (Map dependency : dependencies) {
                                 Records.writeRecord(dependency, connection);

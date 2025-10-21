@@ -183,8 +183,9 @@ public class FolioWriting {
         HashMap folioRecord = new HashMap(_folioRecord);
         batch.add(folioRecord);
 
-        Thread t = Thread.startVirtualThread(() -> lookupFolioHRID(folioRecord));
-        hridLookupThreads.add(t);
+        // We no longer need to do this, since redefining folio HRIDS as Libris control numbers.
+        //Thread t = Thread.startVirtualThread(() -> lookupFolioHRID(folioRecord));
+        //hridLookupThreads.add(t);
 
         if (batch.size() > 20) { // Too large batches results in internal http 414 in folio.
             flushQueue();

@@ -93,9 +93,6 @@ public class EmmDumpImport {
                         Thread t = Thread.startVirtualThread(() -> dependencies.addAll(Records.downloadDependencies(dependenciesToDownload)));
                         threads.add(t);
                     }
-                    for (Thread t : threads) {
-                        t.join();
-                    }
 
                     // Write record and dependencies
                     for (Object item : items) {
@@ -115,6 +112,12 @@ public class EmmDumpImport {
                             Records.writeRecord(itemOf, connection);
                         }
                     }
+
+                    // All dependency downloads must conclude before they can be written.
+                    for (Thread t : threads) {
+                        t.join();
+                    }
+
                     for (Map dependency : dependencies) {
                         Records.writeRecord(dependency, connection);
                     }

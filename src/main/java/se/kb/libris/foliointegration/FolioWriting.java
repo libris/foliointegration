@@ -18,6 +18,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 public class FolioWriting {
@@ -25,6 +27,9 @@ public class FolioWriting {
     private static final String password;
     private static final String folioBaseUri;
     private static final String folioTenant;
+    private static final int folioWriteBatchSize;
+    private static final int folioBatchesPerCell;
+    private static final long folioCellSeconds;
 
     private static List<Map> batch = new ArrayList<>();
     private static List<Thread> hridLookupThreads = new ArrayList<>();
@@ -32,11 +37,20 @@ public class FolioWriting {
     private static long folioTokenValidUntil = 0;
     private static String folioToken = null;
 
+    // Generic Cell Rate Algorithm (GCRA)
+    // Simple/effective way to do throttling.
+    private static Instant throttlingCell = Instant.now();
+    private static int throttlingCount = 0;
+
     static {
         username = System.getenv("FOLIO_USER");
         password = System.getenv("FOLIO_PASS");
         folioBaseUri = System.getenv("OKAPI_URL");
         folioTenant = System.getenv("OKAPI_TENANT");
+
+        folioWriteBatchSize = Integer.parseInt( System.getenv("FOLIO_WRITE_BATCH_SIZE") );
+        folioBatchesPerCell = Integer.parseInt( System.getenv("FOLIO_WRITE_BATCHES_PER_CELL") );
+        folioCellSeconds = Long.parseLong( System.getenv("FOLIO_WRITE_CELL_SECONDS") );
     }
 
     private static String getToken() {
@@ -187,7 +201,7 @@ public class FolioWriting {
         //Thread t = Thread.startVirtualThread(() -> lookupFolioHRID(folioRecord));
         //hridLookupThreads.add(t);
 
-        if (batch.size() > 20) { // Too large batches results in internal http 414 in folio.
+        if (batch.size() >= folioWriteBatchSize) { // Too large batches results in internal http 414 in folio.
             flushQueue();
         }
     }
@@ -211,14 +225,33 @@ public class FolioWriting {
         }*/
         // REMOVE THIS
 
-
-        String token = getToken();
-
         Map recordSet = Map.of("inventoryRecordSets", batch);
         String body = Storage.mapper.writeValueAsString(recordSet);
 
         for (int i = 0; i < 10; ++i) {
             try {
+
+                // Throttle if necessary
+                while (true) {
+                    Instant now = Instant.now();
+                    if (now.isAfter( throttlingCell.plus(folioCellSeconds, ChronoUnit.SECONDS) ) ) {
+                        throttlingCell = now;
+                        throttlingCount = 0;
+                    }
+                    int cellCount = ++throttlingCount;
+                    if (cellCount <= folioBatchesPerCell) {
+                        // Ok to write now!
+                        break;
+                    }
+                    else {
+                        try {
+                            Thread.sleep(1);
+                        } catch (InterruptedException ie) { /* ignore */ }
+                    }
+                }
+
+                String token = getToken();
+
                 URI uri = new URI(folioBaseUri);
                 uri = uri.resolve("/inventory-batch-upsert-hrid");
                 HttpPut request = new HttpPut(uri);

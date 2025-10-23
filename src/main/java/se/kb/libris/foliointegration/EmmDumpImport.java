@@ -224,6 +224,13 @@ public class EmmDumpImport {
                         } catch (InterruptedException e2) {
                             // ignore
                         }
+                    } catch (Exception e) {
+                        Storage.log("Unexpected problem downloading EMM page. ", e);
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e2) {
+                            // ignore
+                        }
                     }
                 }
             });

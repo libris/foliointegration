@@ -112,10 +112,10 @@ public class Server {
                         }
                     }
 
-                    boolean changesMade = false;
-                    changesMade |= EmmSync.run();
-                    FolioSync.run();
-                    if (!changesMade) {
+                    boolean runAgainImmediately = false;
+                    runAgainImmediately |= EmmSync.run();
+                    runAgainImmediately |= FolioSync.run();
+                    if (!runAgainImmediately) {
                         Thread.sleep(100);
                     }
                     break;

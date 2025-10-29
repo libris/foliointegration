@@ -148,7 +148,7 @@ public class IntegrationServlet extends HttpServlet {
                 long syncedUntil = Long.parseLong(untilString);
                 long now = Instant.now().toEpochMilli();
                 long secondDiff = (now - syncedUntil) / 1000;
-                String s = "<hr><br/>FOLIO synced until: " + syncedUntil + ". Meaning " + secondDiff + " seconds behind (or up-to-date if there are no more recent changes). <br/><br/>";
+                String s = "<hr><br/>FOLIO synced until: " + syncedUntil + ". Meaning " + secondDiff + " seconds behind. <br/><br/>";
                 os.write(s.getBytes(StandardCharsets.UTF_8));
 
                 s = """

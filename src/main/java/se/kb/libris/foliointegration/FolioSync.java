@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.*;
 
 public class FolioSync {
@@ -13,8 +14,9 @@ public class FolioSync {
 
     private final static List<String> SIGEL_LIST = Collections.unmodifiableList( Arrays.asList(System.getenv("SIGEL").split(",")) );
 
-    public static void run() throws SQLException, IOException {
+    public static boolean run() throws SQLException, IOException {
         Connection connection = Storage.getConnection();
+        boolean anythingToDo = true;
         try {
             long syncedUntil = Long.parseLong(Storage.getState(SYNCED_UNTIL_KEY, connection));
 
@@ -30,6 +32,13 @@ public class FolioSync {
                         modified = resultSet.getLong(2);
                     }
                 }
+            }
+
+            if (ids.isEmpty()) {
+                // If there's nothing more to sync, consider us up to date (minus a margin, for theoretical changes
+                // made at T but not yet published at T+margin).
+                modified = Instant.now().toEpochMilli() - 500;
+                anythingToDo = false;
             }
 
             // Possibly write
@@ -50,6 +59,7 @@ public class FolioSync {
             Storage.log("ERROR: Failed to write complete update batch to FOLIO.", e);
         }
 
+        return anythingToDo;
     }
 
     private static void considerForExport(long id, Set<Long> cycleProtection, Connection connection) throws SQLException, IOException, InterruptedException {

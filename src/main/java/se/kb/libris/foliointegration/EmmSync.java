@@ -146,6 +146,10 @@ public class EmmSync {
                             Map dependency = Storage.mapper.readValue(response, Map.class);
                             if (dependency.containsKey("@graph")) {
                                 List<Map> graphList = (List<Map>) dependency.get("@graph");
+                                Map mainEntity = graphList.get(1);
+                                Map recordEntity = graphList.get(0);
+                                String controlNumber = (String) recordEntity.get("controlNumber");
+                                mainEntity.put( "meta", Map.of("controlNumber", controlNumber) );
                                 Records.writeRecord(graphList.get(1), connection);
                                 System.err.println("Update of -> " + activityObject.get("id"));
                                 changesMade = true;

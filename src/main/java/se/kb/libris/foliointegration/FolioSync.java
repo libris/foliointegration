@@ -108,7 +108,7 @@ public class FolioSync {
             }
             if (export) {
                 // A visible difference. Write it to folio!
-                //System.err.println(" ** WRITE OF: " + mainEntity);
+                //Storage.log(" ** WRITE OF: " + mainEntity);
                 FolioWriting.queueForExport(mainEntity);
                 try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, checksum) VALUES(?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
                     statement.setLong(1, id);

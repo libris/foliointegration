@@ -131,6 +131,8 @@ public class Records {
                         return;
                     cycleProtection.add((String) m.get("@id"));
 
+                    //Storage.log(" embedding (if exists): " + m.get("@id") + " cycleprot: " + cycleProtection);
+
                     try (PreparedStatement statement = connection.prepareStatement("SELECT entity FROM entities WHERE uri = ?")) {
                         statement.setString(1, (String) m.get("@id"));
                         statement.execute();
@@ -144,7 +146,8 @@ public class Records {
                     }
                 }
                 for (Object k : m.keySet()) {
-                    embellishWithLocalData(m.get(k), cycleProtection, connection);
+                    if (!k.equals("narrower") && !k.equals("broader") && !k.equals("@reverse"))
+                        embellishWithLocalData(m.get(k), cycleProtection, connection);
                 }
                 break;
             }

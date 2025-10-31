@@ -5,7 +5,7 @@ import java.nio.file.Path;
 import java.sql.*;
 import java.time.ZonedDateTime;
 
-import org.codehaus.jackson.map.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.sqlite.SQLiteConfig;
 
 public class Storage {

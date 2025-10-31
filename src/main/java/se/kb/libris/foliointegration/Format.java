@@ -5,10 +5,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.schibsted.spt.data.jslt.Parser;
+import com.schibsted.spt.data.jslt.Expression;
 
 public class Format {
 
@@ -68,16 +69,89 @@ public class Format {
         return items;
     }
 
+    private static String doTypeLookup(Object node) {
+        if (node instanceof Map) {
+            Map map = (Map) node;
+
+            if (map.containsKey("__FOLIO_LOOKUP_TYPE_GUID")) {
+                return instanceTypeToGuid.get( (String) map.get("__FOLIO_LOOKUP_TYPE_GUID") );
+            }
+
+            String removedKey = null;
+            String guid = null;
+            Iterator it = map.keySet().iterator();
+            while (it.hasNext()) {
+                String key = (String) it.next();
+                guid = doTypeLookup(map.get(key));
+                if (guid != null) {
+                    it.remove();
+                    removedKey = key;
+                }
+            }
+            if (removedKey != null) {
+                map.put(removedKey, guid);
+            }
+
+        } else if (node instanceof List) {
+            List list = (List) node;
+            for (Object element : list) {
+                doTypeLookup(element);
+            }
+        }
+
+        return null;
+    }
+
     public static Map formatForFolio(Map originalRootHolding, Connection connection) throws SQLException, IOException {
 
         // Minimum required properties (by FOLIO): "instance" object with [ "source", "title", "instanceTypeId", "hrid" ] as determined by the json-schema.
         // See https://github.com/folio-org/mod-inventory-update/blob/master/ramls/inventory-record-set-with-hrids.json
 
+        Expression instanceJSLT = Parser.compileString("""
+                let titles = .hasTitle
+                let mainTitles = [ for ($titles) if (.mainTitle) .mainTitle ]
+                let mainTitle = $mainTitles[0]
+                
+                {
+                    "source" : "LIBRIS",
+                    "hrid" : .meta.controlNumber,
+                    "title" : $mainTitle,
+                    "sourceUri" : get-key(., "@id"),
+                    "instanceTypeId": { "__FOLIO_LOOKUP_TYPE_GUID" : "unspecified" }
+                }
+                """);
+
+        Expression holdingsJSLT = Parser.compileString("""
+                [for (.)
+                    {
+                        "source" : "LIBRIS",
+                        "hrid" : .itemOf.meta.controlNumber + "-" + 1
+                    }
+                ]
+                """);
+
         Map originalMainEntity = (Map) originalRootHolding.get("itemOf");
 
-        List<Map> allItems = getItems( (String) originalMainEntity.get("@id"), connection);
+        JsonNode instanceJsonNodeOriginal = Storage.mapper.valueToTree(originalMainEntity);
+        JsonNode instanceJsonNodeTransformed = instanceJSLT.apply(instanceJsonNodeOriginal);
+        Map jsltModifiedInstance = Storage.mapper.treeToValue(instanceJsonNodeTransformed, Map.class);
+        doTypeLookup(jsltModifiedInstance);
 
-        //  ----  Holdings  ----
+        Storage.log(" ** CONVERTED INTO: " + jsltModifiedInstance);
+
+
+        List<Map> allItems = getItems( (String) originalMainEntity.get("@id"), connection);
+        for (Map item : allItems) {
+            // embed the instance, to make instance-info available during JSLT-transform.
+            item.put("itemOf", originalMainEntity);
+        }
+
+        JsonNode holdingsJsonNodeOriginal = Storage.mapper.valueToTree(allItems);
+        JsonNode holdingsJsonNodeTransformed = holdingsJSLT.apply(holdingsJsonNodeOriginal);
+        List jsltModifiedHoldings = Storage.mapper.treeToValue(holdingsJsonNodeTransformed, List.class);
+        Storage.log(" ** CONVERTED HOLDINGS INTO: " + jsltModifiedHoldings);
+
+        /*
         List<Map> holdingRecords = new ArrayList<>();
         for (Map item : allItems) {
             String holdingHrid =  item.get("@id") + (String)((Map) item.get("heldBy")).get("@id"); // TEMP
@@ -98,47 +172,20 @@ public class Format {
                     "hrid", holdingHrid,
                     "items", folioItems);
             holdingRecords.add(holdingRecord);
-        }
+        }*/
 
-        //  ----  Instance  ----
 
-        // Titles
-        String mainTitle = "n/a";
-        List<String> alternativeTitles = new ArrayList<>();
-        if (originalMainEntity.containsKey("hasTitle")) {
-            List titles = (List) originalMainEntity.get("hasTitle");
-            if (titles.size() > 0) {
-                Map titleEntity = (Map) titles.get(0);
-                if (titleEntity.containsKey("mainTitle"))
-                    mainTitle = (String) titleEntity.get("mainTitle");
-            }
-            for (int i = 1; i < titles.size(); ++i) {
-                Map titleEntity = (Map) titles.get(i);
-                if (titleEntity.containsKey("mainTitle")) {
-                    String altTitle = (String) titleEntity.get("mainTitle");
-                    if (titleEntity.containsKey("subtitle")) {
-                        altTitle += " : " + titleEntity.get("subtitle");
-                    }
-                    alternativeTitles.add(altTitle);
-                }
-            }
-        }
-
-        Map meta = (Map) originalMainEntity.get("meta");
-        String hrid = (String) meta.get("controlNumber"); // This HRID may be looked up and replaced by the folio writing code before actual writing.
-
-        String instanceTypeId = instanceTypeToGuid.get("unspecified"); // for now, match actual types later.
-
-        // Map.of is pretty, but produces immutable maps, which we cannot have here (we must replace the HRID later).
+        /*
         Map instance = new HashMap();
         instance.put("source", "LIBRIS");
         instance.put("hrid", hrid);
         instance.put("instanceTypeId", instanceTypeId);
         instance.put("title", mainTitle);
         instance.put("indexTitle", mainTitle);
-        instance.put("sourceUri", originalMainEntity.get("@id"));
+        instance.put("sourceUri", originalMainEntity.get("@id"));*/
         Map converted = new HashMap();
-        converted.put("instance", instance);
+
+        converted.put("instance", jsltModifiedInstance);
         //converted.put("holdingsRecords", holdingRecords);
         converted.put("holdingsRecords", new ArrayList<Map>()); // TEMP
 

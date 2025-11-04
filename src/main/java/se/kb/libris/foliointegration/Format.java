@@ -90,14 +90,17 @@ public class Format {
             Iterator it = map.keySet().iterator();
             while (it.hasNext()) {
                 String key = (String) it.next();
-                guid = jsltFolioLookup(map.get(key), JSLTKey, lookupMap);
-                if (guid != null) {
+                String result = jsltFolioLookup(map.get(key), JSLTKey, lookupMap);
+                if (result != null) {
+                    guid = result;
                     it.remove();
                     removedKey = key;
+                    //Storage.log(" ** REMOVING KEY: " + removedKey + " due to replacement with: " + guid);
                 }
             }
             if (guid != null) {
                 map.put(removedKey, guid);
+                //Storage.log(" ** RE-ADDING KEY: " + removedKey + " with value: " + guid);
             }
 
         } else if (node instanceof List) {
@@ -136,8 +139,8 @@ public class Format {
                     for ( zip-with-index(.hasComponent) ) if ( not ( contains( "BESTÄLLD", .shelfMark.label ) ) )
                         {
                             "hrid" : get-key($root, "@id") + "-" + .index,
-                            "location": { "__FOLIO_LOOKUP_LOCATION_GUID" : "Referensbiblioteket" },
-                            "shelfMark" : .value.shelfMark
+                            "permanentLocationId": { "__FOLIO_LOOKUP_LOCATION_GUID" : "Referensbiblioteket" },
+                            "sourceId" : "7c764b4a-cce2-47ff-b64a-3aa3897a26a0"
                         }
                 ]
                 """);
@@ -168,7 +171,7 @@ public class Format {
         // No holdings? Empty list, not null!
         if (folioItems == null)
             folioItems = new ArrayList();
-        
+
         converted.put("holdingsRecords", folioItems);
 
         //Storage.log(" ** CONVERTED INTO: " + converted);

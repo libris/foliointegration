@@ -15,6 +15,7 @@ public class FolioSync {
     private final static List<String> SIGEL_LIST = Collections.unmodifiableList( Arrays.asList(System.getenv("SIGEL").split(",")) );
 
     public static boolean run() throws SQLException, IOException {
+        Format.lookupJsltConversions();
         Connection connection = Storage.getConnection();
         boolean anythingToDo = true;
         try {

@@ -1,6 +1,8 @@
 package se.kb.libris.foliointegration;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -10,12 +12,21 @@ import java.util.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.schibsted.spt.data.jslt.Parser;
 import com.schibsted.spt.data.jslt.Expression;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.util.TimeValue;
+import org.apache.hc.core5.util.Timeout;
 
 public class Format {
 
     // Initial lookup of FOLIO GUIDs for various things, done at startup.
     static Map<String, String> locationToGuid = new HashMap<>();
     static Map<String, String> instanceTypeToGuid = new HashMap<>();
+    static String instanceJsltConversion = null;
+    static String itemJsltConversion = null;
     static {
         try {
 
@@ -39,9 +50,63 @@ public class Format {
 
 
         } catch (IOException ioe) {
-            Storage.log("Failed startup lookup of FOLIO GUIDs", ioe);
+            Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.", ioe);
             System.exit(1);
         }
+
+        if (!lookupJsltConversions()) {
+            Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.");
+            System.exit(1);
+        }
+    }
+
+    public static boolean lookupJsltConversions() {
+        //String instanceJsltUrl = "https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt";
+        //String itemJsltUrl = "https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt";
+
+        String instanceJsltUrl = System.getenv("INSTANCE_JSLT_URL");
+        String itemJsltUrl = System.getenv("ITEM_JSLT_URL");
+
+        try {
+
+            // Get instance conversion
+            {
+                URI uri = new URI(instanceJsltUrl);
+                HttpGet request = new HttpGet(uri);
+                RequestConfig config = RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                request.setConfig(config);
+                ClassicHttpResponse response = Server.httpClient.execute(request);
+                String responseText = EntityUtils.toString(response.getEntity());
+                if (response.getCode() != 200) {
+                    Storage.log("Failed JSLT (instance) lookup: " + response);
+                    return false;
+                }
+                instanceJsltConversion = responseText;
+            }
+
+            // Get item conversion
+            {
+                URI uri = new URI(itemJsltUrl);
+                HttpGet request = new HttpGet(uri);
+                RequestConfig config = RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                request.setConfig(config);
+                ClassicHttpResponse response = Server.httpClient.execute(request);
+                String responseText = EntityUtils.toString(response.getEntity());
+                if (response.getCode() != 200) {
+                    Storage.log("Failed JSLT (item) lookup: " + response);
+                    return false;
+                }
+                itemJsltConversion = responseText;
+            }
+
+        } catch (IOException | URISyntaxException | ParseException e) {
+            Storage.log("Failed JSLT lookup.", e);
+            return false;
+        }
+
+        return true;
     }
 
     private static List<Map> getItems(String mainEntityUri, Connection connection) throws SQLException, IOException {
@@ -118,7 +183,7 @@ public class Format {
         // Minimum required properties (by FOLIO): "instance" object with [ "source", "title", "instanceTypeId", "hrid" ] as determined by the json-schema.
         // See https://github.com/folio-org/mod-inventory-update/blob/master/ramls/inventory-record-set-with-hrids.json
 
-        Expression instanceJSLT = Parser.compileString("""
+        /*Expression instanceJSLT = Parser.compileString("""
                 let titles = .hasTitle
                 let mainTitles = [ for ($titles) if (.mainTitle) .mainTitle ]
                 let mainTitle = $mainTitles[0]
@@ -130,9 +195,10 @@ public class Format {
                     "sourceUri" : get-key(., "@id"),
                     "instanceTypeId": { "__FOLIO_LOOKUP_TYPE_GUID" : "unspecified" }
                 }
-                """);
+                """);*/
+        Expression instanceJSLT = Parser.compileString(instanceJsltConversion);
 
-        Expression holdingsJSLT = Parser.compileString("""
+        /*Expression holdingsJSLT = Parser.compileString("""
                 let root = (.)
                 
                 [
@@ -143,7 +209,8 @@ public class Format {
                             "sourceId" : "7c764b4a-cce2-47ff-b64a-3aa3897a26a0"
                         }
                 ]
-                """);
+                """);*/
+        Expression holdingsJSLT = Parser.compileString(itemJsltConversion);
 
         Map originalMainEntity = (Map) originalRootHolding.get("itemOf");
 

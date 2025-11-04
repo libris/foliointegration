@@ -69,20 +69,20 @@ public class Format {
         return items;
     }
 
-    private static void jstlTypeLookup(Object node) {
-        jstlFolioLookup(node, "__FOLIO_LOOKUP_TYPE_GUID", instanceTypeToGuid);
+    private static void jsltTypeLookup(Object node) {
+        jsltFolioLookup(node, "__FOLIO_LOOKUP_TYPE_GUID", instanceTypeToGuid);
     }
 
-    private static void jstlLocationLookup(Object node) {
-        jstlFolioLookup(node, "__FOLIO_LOOKUP_LOCATION_GUID", locationToGuid);
+    private static void jsltLocationLookup(Object node) {
+        jsltFolioLookup(node, "__FOLIO_LOOKUP_LOCATION_GUID", locationToGuid);
     }
 
-    private static String jstlFolioLookup(Object node, String JSTLKey, Map<String, String> lookupMap) {
+    private static String jsltFolioLookup(Object node, String JSLTKey, Map<String, String> lookupMap) {
         if (node instanceof Map) {
             Map map = (Map) node;
 
-            if (map.containsKey(JSTLKey)) {
-                return lookupMap.get( (String) map.get(JSTLKey) );
+            if (map.containsKey(JSLTKey)) {
+                return lookupMap.get( (String) map.get(JSLTKey) );
             }
 
             String removedKey = null;
@@ -90,20 +90,20 @@ public class Format {
             Iterator it = map.keySet().iterator();
             while (it.hasNext()) {
                 String key = (String) it.next();
-                guid = jstlFolioLookup(map.get(key), JSTLKey, lookupMap);
+                guid = jsltFolioLookup(map.get(key), JSLTKey, lookupMap);
                 if (guid != null) {
                     it.remove();
                     removedKey = key;
                 }
             }
-            if (removedKey != null) {
+            if (guid != null) {
                 map.put(removedKey, guid);
             }
 
         } else if (node instanceof List) {
             List list = (List) node;
             for (Object element : list) {
-                jstlFolioLookup(element, JSTLKey, lookupMap);
+                jsltFolioLookup(element, JSLTKey, lookupMap);
             }
         }
 
@@ -135,7 +135,7 @@ public class Format {
                 [
                     for ( zip-with-index(.hasComponent) ) if ( not ( contains( "BESTÄLLD", .shelfMark.label ) ) )
                         {
-                            "hrid" : $root.itemOf.meta.controlNumber + "-" + .index,
+                            "hrid" : get-key($root, "@id") + "-" + .index,
                             "location": { "__FOLIO_LOOKUP_LOCATION_GUID" : "Referensbiblioteket" },
                             "shelfMark" : .value.shelfMark
                         }
@@ -147,7 +147,7 @@ public class Format {
         JsonNode instanceJsonNodeOriginal = Storage.mapper.valueToTree(originalMainEntity);
         JsonNode instanceJsonNodeTransformed = instanceJSLT.apply(instanceJsonNodeOriginal);
         Map jsltModifiedInstance = Storage.mapper.treeToValue(instanceJsonNodeTransformed, Map.class);
-        jstlTypeLookup(jsltModifiedInstance);
+        jsltTypeLookup(jsltModifiedInstance);
 
         List<Map> allItems = getItems( (String) originalMainEntity.get("@id"), connection);
         List folioItems = null;
@@ -159,14 +159,19 @@ public class Format {
             JsonNode holdingsJsonNodeTransformed = holdingsJSLT.apply(holdingsJsonNodeOriginal);
             folioItems = Storage.mapper.treeToValue(holdingsJsonNodeTransformed, List.class);
         }
-        jstlLocationLookup(folioItems);
+        jsltLocationLookup(folioItems);
 
 
         Map converted = new HashMap();
         converted.put("instance", jsltModifiedInstance);
+
+        // No holdings? Empty list, not null!
+        if (folioItems == null)
+            folioItems = new ArrayList();
+        
         converted.put("holdingsRecords", folioItems);
 
-        Storage.log(" ** CONVERTED INTO: " + converted);
+        //Storage.log(" ** CONVERTED INTO: " + converted);
 
         return converted;
     }

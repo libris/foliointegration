@@ -29,6 +29,9 @@ order. Both of these timestamps can be changed dynamically from the GUI (served 
 application), which lets you control for example if some set of changes  should be written again, or some other set of
 changes should be skipped.
 
+The application never leaves the synchronization state once entered. Closing/killing/restarting the application can be done
+freely at any time (including during dump-downloading).
+
 
 ## Runtime parameters
 This application requires a number of runtime parameters, passed to the application in the form of environment variables.
@@ -97,8 +100,8 @@ This works the same way as the parameter above, but instead specifies where to l
 holdings-records into FOLIO items.
 
 
-To run locally (for development), assuming a locally running EMM server and XL REST API:
-
 ## Development
+
+To run locally (for development), assuming a locally running EMM server and XL REST API:
 
 `EMM_BASE_URL="http://localhost:8186/" FOLIO_USER="..." FOLIO_PASS="..." OKAPI_URL="https://okapi-folio-snapshot.okd-test.kb.se" OKAPI_TENANT="kbtest1" SIGEL="X,S" FOLIO_WRITE_BATCH_SIZE="20" FOLIO_WRITE_BATCHES_PER_CELL="50" FOLIO_WRITE_CELL_SECONDS="1" INSTANCE_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt" ITEM_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt" java -DDBPATH=/tmp/libris.sqlite3 -jar build/libs/foliolibrisintegration.jar`

@@ -17,7 +17,7 @@ import java.sql.SQLException;
 import java.util.*;
 
 public class Records {
-    private final static List<String> propertiesOfInterest = Arrays.asList("mainEntity", "instanceOf", "itemOf", "subject", "agent");
+    private final static List<String> propertiesOfInterest = Arrays.asList("mainEntity", "instanceOf", "itemOf", "subject", "agent", "contribution");
 
     /**
      * Import a fetched record. The connection will be written to, but not

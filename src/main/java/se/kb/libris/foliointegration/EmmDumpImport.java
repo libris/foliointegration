@@ -52,7 +52,7 @@ public class EmmDumpImport {
         connection.commit();
 
         try {
-            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset + "&computedLabel=sv");
             while (uri != null) {
                 Map<String, ?> responseMap = getPage(Integer.parseInt(offset));
 
@@ -85,7 +85,9 @@ public class EmmDumpImport {
                         Map mainEntity = (Map) graphList.get(1);
                         Map itemOf = (Map) mainEntity.get("itemOf");
                         String instanceUri = (String) itemOf.get("@id");
+                        String itemUri = (String) mainEntity.get("@id");
                         dependenciesToDownload.remove(instanceUri);
+                        dependenciesToDownload.remove(itemUri);
 
                         Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
 
@@ -106,7 +108,7 @@ public class EmmDumpImport {
                             Map mainEntity = graphList.get(1);
                             Map itemOf = (Map) mainEntity.get("itemOf");
                             String instanceUri = (String) itemOf.get("@id");
-                            mainEntity.put("itemOf", instanceUri);
+                            mainEntity.put("itemOf", Map.of("@id", instanceUri));
 
                             Records.writeRecord(mainEntity, connection);
                             Records.writeRecord(itemOf, connection);
@@ -196,7 +198,7 @@ public class EmmDumpImport {
      */
     private static void prefetchPage(int offset) {
         try {
-            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset + "&computedLabel=sv");
 
             // Place an empty map with this key when starting. This will be a signal that the page is already being
             // downloaded, and should be waited for rather than re-downloaded.
@@ -247,7 +249,7 @@ public class EmmDumpImport {
         }
 
         try {
-            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset);
+            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=" + offset + "&computedLabel=sv");
 
             var emptyMap = new HashMap<>();
             var page = prefetchedPages.get(uri.toString());
@@ -266,7 +268,7 @@ public class EmmDumpImport {
 
     private static void startIfNotStarted() throws SQLException{
         try {
-            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=0");
+            URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=0&computedLabel=sv");
             HttpGet request = new HttpGet(uri);
             RequestConfig config = RequestConfig.custom()
                     .setConnectionRequestTimeout(Timeout.ofSeconds(15)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();

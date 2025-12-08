@@ -6,10 +6,13 @@ import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.net.URIBuilder;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -167,9 +170,8 @@ public class Records {
             } else {
                 try {
                     Map dependency = Storage.mapper.readValue(response, Map.class);
-                    if (dependency.containsKey("@graph")) {
-                        List<Map> graphList = (List<Map>) dependency.get("@graph");
-                        result.add(graphList.get(1));
+                    if (dependency.containsKey("mainEntity")) {
+                        result.add( (Map) dependency.get("mainEntity") );
                     }
                 } catch (IOException ioe) {
                     Storage.log("Could not handle expected JSON from: " + uri + " [which looks like]: " + response, ioe);
@@ -184,6 +186,12 @@ public class Records {
         for (int i = 0; i < 5; ++i) {
             try {
                 HttpGet request = new HttpGet(uri);
+                URI uriWithParam = new URIBuilder(request.getUri() )
+                        .addParameter("computedLabel", "sv")
+                        .addParameter("framed", "true")
+                        .addParameter("embellished", "false")
+                        .build();
+                request.setUri(uriWithParam);
                 RequestConfig config = RequestConfig.custom()
                         .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
                 request.setConfig(config);
@@ -209,6 +217,8 @@ public class Records {
                 } catch (InterruptedException e2) {
                     // ignore
                 }
+            } catch (URISyntaxException e) {
+                Storage.log("WARNING: Bad URI: " + uri, e);
             }
         }
 

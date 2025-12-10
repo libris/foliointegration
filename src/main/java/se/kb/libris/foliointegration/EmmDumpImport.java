@@ -92,7 +92,7 @@ public class EmmDumpImport {
                         Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
 
                         //dependencies.addAll(Records.downloadDependencies(dependenciesToDownload));
-                        Thread t = Thread.startVirtualThread(() -> dependencies.addAll(Records.downloadDependencies(dependenciesToDownload)));
+                        Thread t = Thread.startVirtualThread(() -> dependencies.addAll(Records.downloadDependencies(dependenciesToDownload, new HashSet<>(), connection)));
                         threads.add(t);
                     }
 

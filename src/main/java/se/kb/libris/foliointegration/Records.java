@@ -160,10 +160,21 @@ public class Records {
         }
     }
 
-    public static List<Map> downloadDependencies(Set<String> uris) {
+    public static List<Map> downloadDependencies(Set<String> urisToDownload, Set<String> cycleProtection, Connection connection) {
         var result = new ArrayList<Map>();
 
-        for (String uri : uris) {
+        String baseUrl = System.getenv("EMM_BASE_URL");
+
+        for (String uri : urisToDownload) {
+
+            // Don't reach to id.kb.se PROD even though that's what the links say. :( Kinda hacky!
+            if (uri.startsWith("https://id.kb.se") && baseUrl.startsWith("https://libris-qa.kb.se"))
+                uri = uri.replace("https://id.kb.se", "https://id-qa.kb.se");
+
+            if (cycleProtection.contains(uri))
+                continue;
+            cycleProtection.add(uri);
+
             String response = downloadJsonLdWithRetry(uri);
             if (response == null) {
                 Storage.log("WARNING: Was unable to download a dependency: " + uri + " which may now be missing in the synced data.");
@@ -173,9 +184,15 @@ public class Records {
                     if (dependency.containsKey("@graph")) {
                         List<Map> graphList = (List<Map>) dependency.get("@graph");
                         result.add(graphList.get(1));
+
+                        Set<String> nextOrderDependencies = collectUrisReferencedByThisRecord(graphList.get(1));
+                        filterUrisWeAlreadyHave(nextOrderDependencies, connection);
+                        result.addAll( downloadDependencies(nextOrderDependencies, cycleProtection, connection) );
                     }
                 } catch (IOException ioe) {
                     Storage.log("Could not handle expected JSON from: " + uri + " [which looks like]: " + response, ioe);
+                } catch (SQLException se) {
+                    Storage.log("Failed to check for existence higher order dependencies.", se);
                 }
             }
         }

@@ -111,14 +111,17 @@ public class EmmSync {
                     if (SIGEL_LIST.contains(libraryCode)) {
                         String response = Records.downloadJsonLdWithRetry((String) activityObject.get("id"));
                         Map record = Storage.mapper.readValue(response, Map.class);
-                        if (record.containsKey("mainEntity")) {
-                            Map mainEntity = (Map) record.get("mainEntity");
+                        if (record.containsKey("@graph")) {
+                            List<Map> graphList = (List<Map>) record.get("@graph");
+
+                            Map recordEntity = graphList.get(0);
+                            Map mainEntity = graphList.get(1);
 
                             Set<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(mainEntity);
                             Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
                             List<Map> dependencies = Records.downloadDependencies(dependenciesToDownload);
 
-                            String controlNumber = (String) record.get("controlNumber");
+                            String controlNumber = (String) recordEntity.get("controlNumber");
                             mainEntity.put( "meta", Map.of("controlNumber", controlNumber) );
 
                             Records.writeRecord(mainEntity, connection);
@@ -142,9 +145,12 @@ public class EmmSync {
                             // An update of an ID we *have*, that's all we need to know.
                             String response = Records.downloadJsonLdWithRetry( (String) activityObject.get("id") );
                             Map updatedRecord = Storage.mapper.readValue(response, Map.class);
-                            if (updatedRecord.containsKey("mainEntity")) {
-                                Map mainEntity = (Map) updatedRecord.get("mainEntity");
-                                String controlNumber = (String) updatedRecord.get("controlNumber");
+                            if (updatedRecord.containsKey("@graph")) {
+                                List<Map> graphList = (List<Map>) updatedRecord.get("@graph");
+
+                                Map recordEntity = graphList.get(0);
+                                Map mainEntity = graphList.get(1);
+                                String controlNumber = (String) recordEntity.get("controlNumber");
                                 mainEntity.put( "meta", Map.of("controlNumber", controlNumber) );
                                 Records.writeRecord(mainEntity, connection);
                                 System.err.println("Update of -> " + activityObject.get("id"));

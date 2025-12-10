@@ -170,8 +170,9 @@ public class Records {
             } else {
                 try {
                     Map dependency = Storage.mapper.readValue(response, Map.class);
-                    if (dependency.containsKey("mainEntity")) {
-                        result.add( (Map) dependency.get("mainEntity") );
+                    if (dependency.containsKey("@graph")) {
+                        List<Map> graphList = (List<Map>) dependency.get("@graph");
+                        result.add(graphList.get(1));
                     }
                 } catch (IOException ioe) {
                     Storage.log("Could not handle expected JSON from: " + uri + " [which looks like]: " + response, ioe);
@@ -188,7 +189,7 @@ public class Records {
                 HttpGet request = new HttpGet(uri);
                 URI uriWithParam = new URIBuilder(request.getUri() )
                         .addParameter("computedLabel", "sv")
-                        .addParameter("framed", "true")
+                        .addParameter("framed", "false")
                         .addParameter("embellished", "false")
                         .build();
                 request.setUri(uriWithParam);

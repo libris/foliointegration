@@ -1,6 +1,7 @@
 package se.kb.libris.foliointegration;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.sql.Connection;
@@ -25,6 +26,8 @@ public class Format {
     // Initial lookup of FOLIO GUIDs for various things, done at startup.
     static Map<String, String> locationToGuid = new HashMap<>();
     static Map<String, String> instanceTypeToGuid = new HashMap<>();
+    static Map<String, String> instanceNoteTypeToGuid = new HashMap<>();
+    static Map<String, String> altTitleTypeToGuid = new HashMap<>();
     static String instanceJsltConversion = null;
     static String itemJsltConversion = null;
     static {
@@ -46,8 +49,24 @@ public class Format {
                 instanceTypeToGuid.put((String)instanceType.get("name"), (String)instanceType.get("id"));
             }
 
-            //System.err.println( " ******** LOCATIONS: " + locationToGuid);
+            // instance note types
+            String instanceNotesResponse = FolioWriting.getFromFolio("instance-note-types?query=cql.allRecords=1%20sortby%20name");
+            Map instanceNoteTypesMap = Storage.mapper.readValue(instanceNotesResponse, Map.class);
+            List<Map> instanceNoteTypes = (List<Map>) instanceNoteTypesMap.get("instanceNoteTypes");
+            for (Map instanceNoteType : instanceNoteTypes) {
+                instanceNoteTypeToGuid.put((String)instanceNoteType.get("name"), (String)instanceNoteType.get("id"));
+            }
 
+            // alternative title types
+            String altTypesResponse = FolioWriting.getFromFolio("alternative-title-types?query=cql.allRecords=1%20sortby%20name");
+            Map altTitleTypesMap = Storage.mapper.readValue(altTypesResponse, Map.class);
+            List<Map> altTitleTypes = (List<Map>) altTitleTypesMap.get("alternativeTitleTypes");
+            for (Map altTitleType : altTitleTypes) {
+                altTitleTypeToGuid.put((String)altTitleType.get("name"), (String)altTitleType.get("id"));
+            }
+
+            //System.err.println(altTypesResponse);
+            System.err.println(instanceNoteTypesMap);
 
         } catch (IOException ioe) {
             Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.", ioe);
@@ -138,8 +157,16 @@ public class Format {
         jsltFolioLookup(node, "__FOLIO_LOOKUP_TYPE_GUID", instanceTypeToGuid);
     }
 
+    private static void jsltNoteTypeLookup(Object node) {
+        jsltFolioLookup(node, "__FOLIO_LOOKUP_NOTE_TYPE_GUID", instanceNoteTypeToGuid);
+    }
+
     private static void jsltLocationLookup(Object node) {
         jsltFolioLookup(node, "__FOLIO_LOOKUP_LOCATION_GUID", locationToGuid);
+    }
+
+    private static void jsltAltTitleLookup(Object node) {
+        jsltFolioLookup(node, "__FOLIO_LOOKUP_ALTTITLETYPE_GUID", altTitleTypeToGuid);
     }
 
     private static String jsltFolioLookup(Object node, String JSLTKey, Map<String, String> lookupMap) {
@@ -196,6 +223,7 @@ public class Format {
                     "instanceTypeId": { "__FOLIO_LOOKUP_TYPE_GUID" : "unspecified" }
                 }
                 """);*/
+        //Expression instanceJSLT = new Parser(new StringReader(instanceJsltConversion)).withObjectFilter(". != {} and . != []").compile(); // Leave nulls in place, but remove empty arrays/object
         Expression instanceJSLT = Parser.compileString(instanceJsltConversion);
 
         /*Expression holdingsJSLT = Parser.compileString("""
@@ -210,6 +238,7 @@ public class Format {
                         }
                 ]
                 """);*/
+        //Expression holdingsJSLT = new Parser(new StringReader(itemJsltConversion)).withObjectFilter(". != {} and . != []").compile(); // Leave nulls in place, but remove empty arrays/object
         Expression holdingsJSLT = Parser.compileString(itemJsltConversion);
 
         Map originalMainEntity = (Map) originalRootHolding.get("itemOf");
@@ -218,6 +247,8 @@ public class Format {
         JsonNode instanceJsonNodeTransformed = instanceJSLT.apply(instanceJsonNodeOriginal);
         Map jsltModifiedInstance = Storage.mapper.treeToValue(instanceJsonNodeTransformed, Map.class);
         jsltTypeLookup(jsltModifiedInstance);
+        jsltNoteTypeLookup(jsltModifiedInstance);
+        jsltAltTitleLookup(jsltModifiedInstance);
 
         List<Map> allItems = getItems( (String) originalMainEntity.get("@id"), connection);
         List folioItems = null;
@@ -229,6 +260,9 @@ public class Format {
             JsonNode holdingsJsonNodeTransformed = holdingsJSLT.apply(holdingsJsonNodeOriginal);
             folioItems = Storage.mapper.treeToValue(holdingsJsonNodeTransformed, List.class);
         }
+        jsltTypeLookup(folioItems);
+        jsltNoteTypeLookup(folioItems);
+        jsltAltTitleLookup(folioItems);
         jsltLocationLookup(folioItems);
 
 

@@ -1,7 +1,6 @@
 package se.kb.libris.foliointegration;
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.sql.Connection;
@@ -34,7 +33,7 @@ public class Format {
         try {
 
             // locations
-            String locations = FolioWriting.getFromFolio("/locations?limit=5000&query=cql.allRecords=1%20sortby%20name");
+            String locations = FolioWriting.getFromFolio("/locations?limit=5000&query=cql.allRecords=1%20sortby%20name&limit=2000");
             Map locationsMap = Storage.mapper.readValue(locations, Map.class);
             List<Map> locationEntities = (List<Map>) locationsMap.get("locations");
             for (Map locationEntity : locationEntities) {
@@ -42,7 +41,7 @@ public class Format {
             }
 
             // resource types
-            String resourceTypesResponse = FolioWriting.getFromFolio("/instance-types?limit=5000&query=cql.allRecords=1%20sortby%20name");
+            String resourceTypesResponse = FolioWriting.getFromFolio("/instance-types?limit=5000&query=cql.allRecords=1%20sortby%20name&limit=2000");
             Map instanceTypesMap = Storage.mapper.readValue(resourceTypesResponse, Map.class);
             List<Map> instanceTypes = (List<Map>) instanceTypesMap.get("instanceTypes");
             for (Map instanceType : instanceTypes) {
@@ -50,7 +49,7 @@ public class Format {
             }
 
             // instance note types
-            String instanceNotesResponse = FolioWriting.getFromFolio("instance-note-types?query=cql.allRecords=1%20sortby%20name");
+            String instanceNotesResponse = FolioWriting.getFromFolio("instance-note-types?query=cql.allRecords=1%20sortby%20name&limit=2000");
             Map instanceNoteTypesMap = Storage.mapper.readValue(instanceNotesResponse, Map.class);
             List<Map> instanceNoteTypes = (List<Map>) instanceNoteTypesMap.get("instanceNoteTypes");
             for (Map instanceNoteType : instanceNoteTypes) {
@@ -58,7 +57,7 @@ public class Format {
             }
 
             // alternative title types
-            String altTypesResponse = FolioWriting.getFromFolio("alternative-title-types?query=cql.allRecords=1%20sortby%20name");
+            String altTypesResponse = FolioWriting.getFromFolio("alternative-title-types?query=cql.allRecords=1%20sortby%20name&limit=2000");
             Map altTitleTypesMap = Storage.mapper.readValue(altTypesResponse, Map.class);
             List<Map> altTitleTypes = (List<Map>) altTitleTypesMap.get("alternativeTitleTypes");
             for (Map altTitleType : altTitleTypes) {
@@ -66,7 +65,7 @@ public class Format {
             }
 
             //System.err.println(altTypesResponse);
-            System.err.println(instanceNoteTypesMap);
+            //System.err.println(instanceNoteTypesMap);
 
         } catch (IOException ioe) {
             Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.", ioe);

@@ -168,8 +168,12 @@ public class Records {
         for (String uri : urisToDownload) {
 
             // Don't reach to id.kb.se PROD even though that's what the links say. :( Kinda hacky!
-            if (uri.startsWith("https://id.kb.se") && baseUrl.startsWith("https://libris-qa.kb.se"))
-                uri = uri.replace("https://id.kb.se", "https://id-qa.kb.se");
+            if ( uri.startsWith("https://id.kb.se") ) {
+                if (baseUrl.startsWith("https://libris-qa.kb.se"))
+                    uri = uri.replace("https://id.kb.se", "https://id-qa.kb.se");
+                else if (baseUrl.startsWith("https://libris-dev.kb.se"))
+                    uri = uri.replace("https://id.kb.se", "https://id-dev.kb.se");
+            }
 
             if (cycleProtection.contains(uri))
                 continue;

@@ -219,10 +219,10 @@ public class FolioWriting {
 
 
         // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
-        if (1 == 1) {
+        /*if (1 == 1) {
             batch.clear();
             return;
-        }
+        }*/
         // REMOVE THIS
 
         Map recordSet = Map.of("inventoryRecordSets", batch);

@@ -29,6 +29,7 @@ public class Format {
     static Map<String, String> instanceTypeToGuid = new HashMap<>();
     static Map<String, String> instanceNoteTypeToGuid = new HashMap<>();
     static Map<String, String> altTitleTypeToGuid = new HashMap<>();
+    static Map<String, String> identifierTypeToGuid = new HashMap<>();
     static String instanceJsltConversion = null;
     static String itemJsltConversion = null;
     static Instant lastJsltUpdate = Instant.ofEpochMilli(0);
@@ -67,8 +68,15 @@ public class Format {
                 altTitleTypeToGuid.put((String)altTitleType.get("name"), (String)altTitleType.get("id"));
             }
 
-            //System.err.println(altTypesResponse);
-            //System.err.println(instanceNoteTypesMap);
+            // identifier types
+            String IdentifierTypesResponse = FolioWriting.getFromFolio("identifier-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
+            Map identifierTypesMap = Storage.mapper.readValue(IdentifierTypesResponse, Map.class);
+            List<Map> identifierTypes = (List<Map>) identifierTypesMap.get("identifierTypes");
+            for (Map identifierType : identifierTypes) {
+                identifierTypeToGuid.put((String)identifierType.get("name"), (String)identifierType.get("id"));
+            }
+
+            //System.err.println("** THIS: " + identifierTypeToGuid);
 
         } catch (IOException ioe) {
             Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.", ioe);
@@ -177,6 +185,10 @@ public class Format {
         jsltFolioLookup(node, "__FOLIO_LOOKUP_ALTTITLETYPE_GUID", altTitleTypeToGuid);
     }
 
+    private static void jsltIdentifierLookup(Object node) {
+        jsltFolioLookup(node, "__FOLIO_LOOKUP_IDENTIFIER_TYPE_GUID", identifierTypeToGuid);
+    }
+
     private static String jsltFolioLookup(Object node, String JSLTKey, Map<String, String> lookupMap) {
         if (node instanceof Map) {
             Map map = (Map) node;
@@ -257,6 +269,7 @@ public class Format {
         jsltTypeLookup(jsltModifiedInstance);
         jsltNoteTypeLookup(jsltModifiedInstance);
         jsltAltTitleLookup(jsltModifiedInstance);
+        jsltIdentifierLookup(jsltModifiedInstance);
 
         List<Map> allItems = getItems( (String) originalMainEntity.get("@id"), connection);
         List folioItems = null;
@@ -272,6 +285,7 @@ public class Format {
         jsltNoteTypeLookup(folioItems);
         jsltAltTitleLookup(folioItems);
         jsltLocationLookup(folioItems);
+        jsltIdentifierLookup(folioItems);
 
 
         Map converted = new HashMap();

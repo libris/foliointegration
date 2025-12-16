@@ -220,6 +220,11 @@ public class FolioWriting {
 
         // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
         /*if (1 == 1) {
+            List<String> writtenIDs = new ArrayList<>();
+            for (Map record : batch) {
+                writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
+            }
+            Storage.log("[WOULD HAVE] Written (but not live) " + batch.size() + " records to FOLIO: " + writtenIDs);
             batch.clear();
             return;
         }*/
@@ -276,8 +281,12 @@ public class FolioWriting {
                 }
 
                 // IF OK
-                Storage.log("Synced " + batch.size() + " records to FOLIO.");
                 batch.clear();
+                List<String> writtenIDs = new ArrayList<>();
+                for (Map record : batch) {
+                    writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
+                }
+                Storage.log("Wrote " + batch.size() + " records to FOLIO: " + writtenIDs);
                 return;
             } catch (IOException | URISyntaxException | ParseException e) {
                 try {

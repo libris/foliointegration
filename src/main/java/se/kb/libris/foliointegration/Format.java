@@ -7,6 +7,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -29,11 +31,12 @@ public class Format {
     static Map<String, String> altTitleTypeToGuid = new HashMap<>();
     static String instanceJsltConversion = null;
     static String itemJsltConversion = null;
+    static Instant lastJsltUpdate = Instant.ofEpochMilli(0);
     static {
         try {
 
             // locations
-            String locations = FolioWriting.getFromFolio("/locations?limit=5000&query=cql.allRecords=1%20sortby%20name&limit=2000");
+            String locations = FolioWriting.getFromFolio("/locations?query=cql.allRecords=1%20sortby%20name&limit=5000");
             Map locationsMap = Storage.mapper.readValue(locations, Map.class);
             List<Map> locationEntities = (List<Map>) locationsMap.get("locations");
             for (Map locationEntity : locationEntities) {
@@ -41,7 +44,7 @@ public class Format {
             }
 
             // resource types
-            String resourceTypesResponse = FolioWriting.getFromFolio("/instance-types?limit=5000&query=cql.allRecords=1%20sortby%20name&limit=2000");
+            String resourceTypesResponse = FolioWriting.getFromFolio("/instance-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
             Map instanceTypesMap = Storage.mapper.readValue(resourceTypesResponse, Map.class);
             List<Map> instanceTypes = (List<Map>) instanceTypesMap.get("instanceTypes");
             for (Map instanceType : instanceTypes) {
@@ -49,7 +52,7 @@ public class Format {
             }
 
             // instance note types
-            String instanceNotesResponse = FolioWriting.getFromFolio("instance-note-types?query=cql.allRecords=1%20sortby%20name&limit=2000");
+            String instanceNotesResponse = FolioWriting.getFromFolio("instance-note-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
             Map instanceNoteTypesMap = Storage.mapper.readValue(instanceNotesResponse, Map.class);
             List<Map> instanceNoteTypes = (List<Map>) instanceNoteTypesMap.get("instanceNoteTypes");
             for (Map instanceNoteType : instanceNoteTypes) {
@@ -57,7 +60,7 @@ public class Format {
             }
 
             // alternative title types
-            String altTypesResponse = FolioWriting.getFromFolio("alternative-title-types?query=cql.allRecords=1%20sortby%20name&limit=2000");
+            String altTypesResponse = FolioWriting.getFromFolio("alternative-title-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
             Map altTitleTypesMap = Storage.mapper.readValue(altTypesResponse, Map.class);
             List<Map> altTitleTypes = (List<Map>) altTitleTypesMap.get("alternativeTitleTypes");
             for (Map altTitleType : altTitleTypes) {
@@ -79,6 +82,12 @@ public class Format {
     }
 
     public static boolean lookupJsltConversions() {
+
+        Instant now = Instant.now();
+        if (now.isBefore(lastJsltUpdate.plus(10, ChronoUnit.SECONDS)))
+            return false;
+        lastJsltUpdate = now;
+
         //String instanceJsltUrl = "https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt";
         //String itemJsltUrl = "https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt";
 

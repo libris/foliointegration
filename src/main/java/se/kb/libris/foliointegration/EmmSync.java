@@ -129,7 +129,7 @@ public class EmmSync {
                             for (Map dependency : dependencies) {
                                 Records.writeRecord(dependency, connection);
                             }
-                            System.err.println("Create of " + libraryCode + " -> " + activityObject.get("id"));
+                            Storage.log("Taking relevant EMM creation: " + libraryCode + " " + activityObject.get("id"));
                             changesMade = true;
                         }
                     }
@@ -153,7 +153,7 @@ public class EmmSync {
                                 String controlNumber = (String) recordEntity.get("controlNumber");
                                 mainEntity.put( "meta", Map.of("controlNumber", controlNumber) );
                                 Records.writeRecord(mainEntity, connection);
-                                System.err.println("Update of -> " + activityObject.get("id"));
+                                Storage.log("Taking relevant EMM update: " + activityObject.get("id"));
                                 changesMade = true;
                             }
                         }
@@ -166,7 +166,7 @@ public class EmmSync {
                     statement.setString(1, (String) activityObject.get("id"));
                     statement.execute();
                 }
-                System.err.println("Delete of -> " + activityObject.get("id"));
+                Storage.log("Taking relevant EMM delete: " + activityObject.get("id"));
                 break;
             }
         }

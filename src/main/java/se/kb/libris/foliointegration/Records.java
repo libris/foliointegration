@@ -187,7 +187,14 @@ public class Records {
                     Map dependency = Storage.mapper.readValue(response, Map.class);
                     if (dependency.containsKey("@graph")) {
                         List<Map> graphList = (List<Map>) dependency.get("@graph");
-                        result.add(graphList.get(1));
+
+                        Map recordEntity = graphList.get(0);
+                        Map mainEntity = graphList.get(1);
+                        if (recordEntity.containsKey("controlNumber")) {
+                            String controlNumber = (String) recordEntity.get("controlNumber");
+                            mainEntity.put("meta", Map.of("controlNumber", controlNumber));
+                        }
+                        result.add(mainEntity);
 
                         Set<String> nextOrderDependencies = collectUrisReferencedByThisRecord(graphList.get(1));
                         filterUrisWeAlreadyHave(nextOrderDependencies, connection);

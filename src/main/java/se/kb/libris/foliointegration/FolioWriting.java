@@ -281,12 +281,12 @@ public class FolioWriting {
                 }
 
                 // IF OK
-                batch.clear();
                 List<String> writtenIDs = new ArrayList<>();
                 for (Map record : batch) {
                     writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
                 }
                 Storage.log("Wrote " + batch.size() + " records to FOLIO: " + writtenIDs);
+                batch.clear();
                 return;
             } catch (IOException | URISyntaxException | ParseException e) {
                 try {

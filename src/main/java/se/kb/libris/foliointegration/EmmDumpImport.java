@@ -81,9 +81,13 @@ public class EmmDumpImport {
 
                         Set<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(graphList.get(1));
 
-                        // We do NOT want to download the instance again, even though it is referenced. We have it already.
+                        // We need the record part
+                        Map recordEntity = (Map) graphList.get(0);
                         Map mainEntity = (Map) graphList.get(1);
                         Map itemOf = (Map) mainEntity.get("itemOf");
+                        mainEntity.put( "meta", recordEntity );
+
+                        // We do NOT want to download the instance again, even though it is referenced. We have it already.
                         String instanceUri = (String) itemOf.get("@id");
                         String itemUri = (String) mainEntity.get("@id");
                         dependenciesToDownload.remove(instanceUri);

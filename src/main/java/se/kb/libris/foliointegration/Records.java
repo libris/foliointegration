@@ -191,8 +191,7 @@ public class Records {
                         Map recordEntity = graphList.get(0);
                         Map mainEntity = graphList.get(1);
                         if (recordEntity.containsKey("controlNumber")) {
-                            String controlNumber = (String) recordEntity.get("controlNumber");
-                            mainEntity.put("meta", Map.of("controlNumber", controlNumber));
+                            mainEntity.put( "meta", recordEntity );
                         }
                         result.add(mainEntity);
 
@@ -229,7 +228,7 @@ public class Records {
 
                 boolean isJsonld = false;
                 for (Header header : response.getHeaders("Content-Type")) {
-                    if (header.getValue().contains("application/ld+json"))
+                    if (header.getValue().contains("application/ld+json") || header.getValue().contains("application/json"))
                         isJsonld = true;
                 }
 

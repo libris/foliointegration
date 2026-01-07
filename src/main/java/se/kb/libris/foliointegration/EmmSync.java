@@ -121,8 +121,7 @@ public class EmmSync {
                             Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
                             List<Map> dependencies = Records.downloadDependencies(dependenciesToDownload, new HashSet<>(), connection);
 
-                            String controlNumber = (String) recordEntity.get("controlNumber");
-                            mainEntity.put( "meta", Map.of("controlNumber", controlNumber) );
+                            mainEntity.put( "meta", recordEntity );
 
                             Records.writeRecord(mainEntity, connection);
 
@@ -150,8 +149,7 @@ public class EmmSync {
 
                                 Map recordEntity = graphList.get(0);
                                 Map mainEntity = graphList.get(1);
-                                String controlNumber = (String) recordEntity.get("controlNumber");
-                                mainEntity.put( "meta", Map.of("controlNumber", controlNumber) );
+                                mainEntity.put( "meta", recordEntity );
                                 Records.writeRecord(mainEntity, connection);
                                 Storage.log("Taking relevant EMM update: " + activityObject.get("id"));
                                 changesMade = true;

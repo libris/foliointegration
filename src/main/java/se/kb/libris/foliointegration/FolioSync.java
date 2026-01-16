@@ -57,7 +57,10 @@ public class FolioSync {
             connection.commit();
         } catch (Exception e) {
             connection.rollback();
-            Storage.log("ERROR: Failed to write complete update batch to FOLIO.", e);
+            Storage.log("ERROR: Failed to write complete update batch to FOLIO. Backing off 10 seconds", e);
+            try {
+                Thread.sleep(10 * 1000);
+            } catch (InterruptedException ie) { /*ignore*/ }
         }
 
         return anythingToDo;

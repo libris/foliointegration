@@ -101,6 +101,7 @@ public class Format {
 
         String instanceJsltUrl = System.getenv("INSTANCE_JSLT_URL");
         String itemJsltUrl = System.getenv("ITEM_JSLT_URL");
+        boolean changed = false;
 
         try {
 
@@ -117,7 +118,13 @@ public class Format {
                     Storage.log("Failed JSLT (instance) lookup: " + response);
                     return false;
                 }
-                instanceJsltConversion = responseText;
+
+                if (responseText != null) {
+                    if (instanceJsltConversion == null || !instanceJsltConversion.equals(responseText)) {
+                        instanceJsltConversion = responseText;
+                        Storage.log("Obtained a new set of conversion rules (instance).");
+                    }
+                }
             }
 
             // Get item conversion
@@ -133,7 +140,13 @@ public class Format {
                     Storage.log("Failed JSLT (item) lookup: " + response);
                     return false;
                 }
-                itemJsltConversion = responseText;
+
+                if (responseText != null) {
+                    if (itemJsltConversion == null || !itemJsltConversion.equals(responseText) ) {
+                        itemJsltConversion = responseText;
+                        Storage.log("Obtained a new set of conversion rules (item).");
+                    }
+                }
             }
 
         } catch (IOException | URISyntaxException | ParseException e) {

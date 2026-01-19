@@ -275,7 +275,32 @@ public class FolioWriting {
                 ClassicHttpResponse response = Server.httpClient.execute(request);
                 String responseText = EntityUtils.toString(response.getEntity());
 
-                if (response.getCode() != 200) {
+                List<String> failedHridsInBatch = new ArrayList<>();
+                if (response.getCode() == 207) { // "Multi-status", mixed response. We need to figure out which records went bad
+                    // Need to parse error message per record tried: /errors/N/entity/hrid
+                    // If folio changes the way it reports errors, this will break down in a hurry.
+                    // If that ever happens, the easy temporary fix, is to ignore this code, and just set
+                    // the batch size to 1.
+                    Map responseMap = Storage.mapper.readValue(responseText, Map.class);
+                    if (responseMap.containsKey("errors")) {
+                        if ( responseMap.get("errors") instanceof List errors) {
+                            for (Object o : errors) {
+                                if ( o instanceof Map error) {
+                                    if ( error.get("entity") instanceof Map requesEntity) {
+                                        if ( requesEntity.get("hrid") instanceof String hridBroken) {
+                                            failedHridsInBatch.add(hridBroken);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                } else if (response.getCode() != 200) {
+
+                    // If neither 200 nor 207, something else (unknown) has happened. This could be things like network problems,
+                    // downtimes, or something else entirely. We cannot proceed without a retry.
+
                     Storage.log("Failed FOLIO write: " + response + " / " + responseText);
                     continue;
                 }
@@ -285,7 +310,11 @@ public class FolioWriting {
                 for (Map record : batch) {
                     writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
                 }
-                Storage.log("Wrote " + batch.size() + " records to FOLIO: " + writtenIDs);
+                writtenIDs.removeAll(failedHridsInBatch);
+                if (failedHridsInBatch.isEmpty())
+                    Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs);
+                else
+                    Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs + " The following should have been written but were rejected: " + failedHridsInBatch);
                 batch.clear();
                 return;
             } catch (IOException | URISyntaxException | ParseException e) {

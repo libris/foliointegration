@@ -237,135 +237,127 @@ public class FolioWriting {
         Map recordSet = Map.of("inventoryRecordSets", batch);
         String body = Storage.mapper.writeValueAsString(recordSet);
 
-        for (int i = 0; i < 10; ++i) { // TODO: Does this serve a purpose, is it not a retry within a retry? remove..
-            try {
 
-                // Throttle if necessary
-                while (true) {
-                    Instant now = Instant.now();
-                    if (now.isAfter( throttlingCell.plus(folioCellSeconds, ChronoUnit.SECONDS) ) ) {
-                        throttlingCell = now;
-                        throttlingCount = 0;
-                    }
-                    int cellCount = ++throttlingCount;
-                    if (cellCount <= folioBatchesPerCell) {
-                        // Ok to write now!
-                        break;
-                    }
-                    else {
-                        try {
-                            Thread.sleep(1);
-                        } catch (InterruptedException ie) { /* ignore */ }
-                    }
+        try {
+
+            // Throttle if necessary
+            while (true) {
+                Instant now = Instant.now();
+                if (now.isAfter( throttlingCell.plus(folioCellSeconds, ChronoUnit.SECONDS) ) ) {
+                    throttlingCell = now;
+                    throttlingCount = 0;
                 }
+                int cellCount = ++throttlingCount;
+                if (cellCount <= folioBatchesPerCell) {
+                    // Ok to write now!
+                    break;
+                }
+                else {
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException ie) { /* ignore */ }
+                }
+            }
 
-                String token = getToken();
+            String token = getToken();
 
-                URI uri = new URI(folioBaseUri);
-                uri = uri.resolve("/inventory-batch-upsert-hrid");
-                HttpPut request = new HttpPut(uri);
-                RequestConfig config = RequestConfig.custom()
-                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
-                request.setConfig(config);
+            URI uri = new URI(folioBaseUri);
+            uri = uri.resolve("/inventory-batch-upsert-hrid");
+            HttpPut request = new HttpPut(uri);
+            RequestConfig config = RequestConfig.custom()
+                    .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+            request.setConfig(config);
 
-                StringEntity entity = new StringEntity(body);
-                request.setEntity(entity);
+            StringEntity entity = new StringEntity(body);
+            request.setEntity(entity);
 
-                request.setHeader("X-Okapi-Tenant", folioTenant);
-                request.setHeader("Accept", "application/json");
-                request.setHeader("Content-type", "application/json");
-                request.setHeader("Cookie", token);
+            request.setHeader("X-Okapi-Tenant", folioTenant);
+            request.setHeader("Accept", "application/json");
+            request.setHeader("Content-type", "application/json");
+            request.setHeader("Cookie", token);
 
-                ClassicHttpResponse response = Server.httpClient.execute(request);
-                String responseText = EntityUtils.toString(response.getEntity());
+            ClassicHttpResponse response = Server.httpClient.execute(request);
+            String responseText = EntityUtils.toString(response.getEntity());
 
-                // These two use the same indexing. Meaning errorShortMessagesInBatch[5] refers to the message received for failedHridsInBatch[5]
-                List<String> failedHridsInBatch = new ArrayList<>();
-                List<String> errorShortMessagesInBatch = new ArrayList<>();
+            // These two use the same indexing. Meaning errorShortMessagesInBatch[5] refers to the message received for failedHridsInBatch[5]
+            List<String> failedHridsInBatch = new ArrayList<>();
+            List<String> errorShortMessagesInBatch = new ArrayList<>();
 
-                if (response.getCode() == 207) { // "Multi-status", mixed response. We need to figure out which records went bad
-                    // Need to parse error message per record tried: /errors/N/entity/hrid
-                    // If folio changes the way it reports errors, this will break down in a hurry.
-                    // If that ever happens, the easy temporary fix, is to ignore this code, and just set
-                    // the batch size to 1.
-                    Map responseMap = Storage.mapper.readValue(responseText, Map.class);
-                    if (responseMap.containsKey("errors")) {
-                        if ( responseMap.get("errors") instanceof List errors) {
-                            for (Object o : errors) {
-                                if ( o instanceof Map error) {
-                                    if ( error.get("entity") instanceof Map requesEntity) {
-                                        if ( requesEntity.get("hrid") instanceof String hridBroken) {
-                                            failedHridsInBatch.add(hridBroken);
-                                        }
+            if (response.getCode() == 207) { // "Multi-status", mixed response. We need to figure out which records went bad
+                // Need to parse error message per record tried: /errors/N/entity/hrid
+                // If folio changes the way it reports errors, this will break down in a hurry.
+                // If that ever happens, the easy temporary fix, is to ignore this code, and just set
+                // the batch size to 1.
+                Map responseMap = Storage.mapper.readValue(responseText, Map.class);
+                if (responseMap.containsKey("errors")) {
+                    if ( responseMap.get("errors") instanceof List errors) {
+                        for (Object o : errors) {
+                            if ( o instanceof Map error) {
+                                if ( error.get("entity") instanceof Map requesEntity) {
+                                    if ( requesEntity.get("hrid") instanceof String hridBroken) {
+                                        failedHridsInBatch.add(hridBroken);
                                     }
-                                    if ( error.get("shortMessage") instanceof String shortMessage) {
-                                        errorShortMessagesInBatch.add(shortMessage);
-                                    } else {
-                                        errorShortMessagesInBatch.add("No short message in error response.");
-                                    }
+                                }
+                                if ( error.get("shortMessage") instanceof String shortMessage) {
+                                    errorShortMessagesInBatch.add(shortMessage);
+                                } else {
+                                    errorShortMessagesInBatch.add("No short message in error response.");
                                 }
                             }
                         }
                     }
-
-                } else if (response.getCode() != 200) {
-
-                    // If neither 200 nor 207, something else (unknown) has happened. This could be things like network problems,
-                    // downtimes, or something else entirely. We cannot proceed without a retry.
-
-                    Storage.log("Failed FOLIO write: " + response + " / " + responseText);
-                    continue;
                 }
 
-                // IF OK
-                List<String> writtenIDs = new ArrayList<>();
-                for (Map record : batch) {
-                    writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
-                }
-                writtenIDs.removeAll(failedHridsInBatch);
-                if (failedHridsInBatch.isEmpty()) {
-                    Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs);
-                } else {
+            } else if (response.getCode() != 200) {
 
-                    // Mark failed exports for human scrutiny
-                    for (int j = 0; j < failedHridsInBatch.size(); ++j) {
-                        String failedHrid = failedHridsInBatch.get(j);
-                        String shortMessage = errorShortMessagesInBatch.get(j);
-                        String sql = """
-                                INSERT OR REPLACE INTO export_failures (hrid, short_message, time) VALUES(?, ?, ?);
-                                """;
-                        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                            statement.setString(1, failedHrid);
-                            statement.setString(2, shortMessage);
-                            statement.setString(3, ZonedDateTime.now().toString());
-                            statement.execute();
-                        }
-                    }
+                // If neither 200 nor 207, something else (unknown) has happened. This could be things like network problems,
+                // downtimes, or something else entirely. We cannot proceed without a retry.
 
-                    Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs + " The following should have been written but were rejected: " + failedHridsInBatch);
-                }
-                // Clear any previous failed exports that have now resolved.
-                for (String writtenHrid : writtenIDs) {
+                Storage.log("Failed FOLIO write: " + response + " / " + responseText);
+                return;
+            }
+
+            // IF OK
+            List<String> writtenIDs = new ArrayList<>();
+            for (Map record : batch) {
+                writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
+            }
+            writtenIDs.removeAll(failedHridsInBatch);
+            if (failedHridsInBatch.isEmpty()) {
+                Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs);
+            } else {
+
+                // Mark failed exports for human scrutiny
+                for (int j = 0; j < failedHridsInBatch.size(); ++j) {
+                    String failedHrid = failedHridsInBatch.get(j);
+                    String shortMessage = errorShortMessagesInBatch.get(j);
                     String sql = """
-                                DELETE FROM export_failures WHERE hrid = ?;
-                                """;
+                            INSERT OR REPLACE INTO export_failures (hrid, short_message, time) VALUES(?, ?, ?);
+                            """;
                     try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                        statement.setString(1, writtenHrid);
+                        statement.setString(1, failedHrid);
+                        statement.setString(2, shortMessage);
+                        statement.setString(3, ZonedDateTime.now().toString());
                         statement.execute();
                     }
                 }
-                batch.clear();
-                return;
-            } catch (IOException | URISyntaxException | ParseException e) {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e2) {
-                    // ignore
+
+                Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs + " The following should have been written but were rejected: " + failedHridsInBatch);
+            }
+            // Clear any previous failed exports that have now resolved.
+            for (String writtenHrid : writtenIDs) {
+                String sql = """
+                            DELETE FROM export_failures WHERE hrid = ?;
+                            """;
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, writtenHrid);
+                    statement.execute();
                 }
             }
+            batch.clear();
+        } catch (IOException | URISyntaxException | ParseException e) {
+            Storage.log("Unexpected. ", e);
         }
 
-        // All retries failed.
-        throw new IOException("Writing to FOLIO failed, even with retries.");
     }
 }

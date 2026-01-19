@@ -9,9 +9,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import java.sql.*;
 import java.time.*;
 
 public class IntegrationServlet extends HttpServlet {
@@ -36,6 +34,23 @@ public class IntegrationServlet extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
 
+        // Get a read-only database connection. This is separate from the singular connection used by the syncing code,
+        // and MUST NOT ever issue writes (see Storage.getConnection for details).
+        String dbPath = "/data/libris.sqlite3";
+        if (System.getProperty("DBPATH") != null)
+            dbPath = System.getProperty("DBPATH");
+        var url = "jdbc:sqlite:" + dbPath;
+        Connection readOnlyConnection;
+        try {
+            SQLiteConfig config = new SQLiteConfig();
+            config.setReadOnly(true);
+            readOnlyConnection = DriverManager.getConnection(url, config.toProperties());
+        } catch (SQLException e) {
+            try { response.getOutputStream().write("Could not read state.".getBytes(StandardCharsets.UTF_8)); } catch (IOException ioe) { /*ignore*/ }
+            response.setStatus(500);
+            return;
+        }
+
         switch (request.getServletPath()) {
             case "/emmtime": {
                 String line = request.getReader().readLine();
@@ -52,6 +67,7 @@ public class IntegrationServlet extends HttpServlet {
                         Thread.sleep(10);
                     } catch (InterruptedException e) {/* ignore */}
                 }
+                response.sendRedirect("/");
                 break;
             }
             case "/foliotime": {
@@ -69,12 +85,36 @@ public class IntegrationServlet extends HttpServlet {
                         Thread.sleep(10);
                     } catch (InterruptedException e) {/* ignore */}
                 }
+                response.sendRedirect("/");
+                break;
+            }
+            case "/csvfailures": {
+                StringBuilder sb = new StringBuilder();
+                String sql = """
+                    SELECT hrid, time, short_message FROM export_failures;
+                    """;
+                try (PreparedStatement statement = readOnlyConnection.prepareStatement(sql)) {
+                    statement.execute();
+                    try(ResultSet resultSet = statement.getResultSet()) {
+                        while (resultSet.next()) {
+                            String hrid = resultSet.getString(1);
+                            String time = resultSet.getString(2);
+                            String shortMessage = "\"" + resultSet.getString(3).replaceAll("\"", "'") + "\"";
+
+                            sb.append(hrid+";"+time+";"+shortMessage+"\r\n");
+                        }
+                    }
+                } catch (SQLException e) {
+                    try { response.getOutputStream().write("Could not read state.".getBytes(StandardCharsets.UTF_8)); } catch (IOException ioe) { /*ignore*/ }
+                }
+                response.setContentType("text/csv");
+                response.getOutputStream().write("HRID;TIME;SHORT_MESSAGE\r\n".getBytes(StandardCharsets.UTF_8));
+                response.getOutputStream().write(sb.toString().getBytes(StandardCharsets.UTF_8));
                 break;
             }
             default:
                 Storage.log("Suspicious POST to " + request.getServletPath() + " (ignoring).");
         }
-        response.sendRedirect("/");
     }
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -111,10 +151,15 @@ public class IntegrationServlet extends HttpServlet {
             response.setStatus(500);
             return;
         }
+        catch (SQLException e) {
+            log("Data layer failure.", e);
+            response.setStatus(500);
+            return;
+        }
         response.setStatus(200);
     }
 
-    private void renderStayingInSync(OutputStream os, Connection readOnlyConnection) throws IOException {
+    private void renderStayingInSync(OutputStream os, Connection readOnlyConnection) throws IOException, SQLException {
         os.write(intro.getBytes(StandardCharsets.UTF_8));
 
         // EMM sync state
@@ -159,6 +204,22 @@ public class IntegrationServlet extends HttpServlet {
                         </form>
                         """.stripIndent();
                 os.write(s.getBytes(StandardCharsets.UTF_8));
+
+                String exportFailureCount = "n/a";
+                String sql = """
+                    SELECT COUNT(hrid) FROM export_failures;
+                    """;
+                try (PreparedStatement statement = readOnlyConnection.prepareStatement(sql)) {
+                    statement.execute();
+                    try(ResultSet resultSet = statement.getResultSet()) {
+                        if (resultSet.next()) {
+                            exportFailureCount = resultSet.getString(1);
+                        }
+                    }
+                }
+                s = " <br/><br/>There are currently " + exportFailureCount + " records out of date because they could not be written to FOLIO. <form action='/csvfailures' method='post'><input type='submit' value='Download CSV list'></form>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+
             } else {
                 String s = "<br/>Odd FOLIO sync state. Shouldn't happen.<br/>";
                 os.write(s.getBytes(StandardCharsets.UTF_8));

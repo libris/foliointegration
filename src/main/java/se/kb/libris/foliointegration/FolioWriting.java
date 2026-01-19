@@ -18,7 +18,11 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -193,7 +197,7 @@ public class FolioWriting {
         }
     }
 
-    public static synchronized void queueForExport(Map _folioRecord) throws IOException, InterruptedException {
+    public static synchronized void queueForExport(Map _folioRecord, Connection connection) throws IOException, InterruptedException, SQLException {
         HashMap folioRecord = new HashMap(_folioRecord);
         batch.add(folioRecord);
 
@@ -202,11 +206,11 @@ public class FolioWriting {
         //hridLookupThreads.add(t);
 
         if (batch.size() >= folioWriteBatchSize) { // Too large batches results in internal http 414 in folio.
-            flushQueue();
+            flushQueue(connection);
         }
     }
 
-    public static synchronized void flushQueue() throws IOException, InterruptedException {
+    public static synchronized void flushQueue(Connection connection) throws IOException, InterruptedException, SQLException {
 
         // All HRID lookups must have concluded before flushing is possible
         for (Thread t : hridLookupThreads) {
@@ -233,7 +237,7 @@ public class FolioWriting {
         Map recordSet = Map.of("inventoryRecordSets", batch);
         String body = Storage.mapper.writeValueAsString(recordSet);
 
-        for (int i = 0; i < 10; ++i) {
+        for (int i = 0; i < 10; ++i) { // TODO: Does this serve a purpose, is it not a retry within a retry? remove..
             try {
 
                 // Throttle if necessary
@@ -275,7 +279,10 @@ public class FolioWriting {
                 ClassicHttpResponse response = Server.httpClient.execute(request);
                 String responseText = EntityUtils.toString(response.getEntity());
 
+                // These two use the same indexing. Meaning errorShortMessagesInBatch[5] refers to the message received for failedHridsInBatch[5]
                 List<String> failedHridsInBatch = new ArrayList<>();
+                List<String> errorShortMessagesInBatch = new ArrayList<>();
+
                 if (response.getCode() == 207) { // "Multi-status", mixed response. We need to figure out which records went bad
                     // Need to parse error message per record tried: /errors/N/entity/hrid
                     // If folio changes the way it reports errors, this will break down in a hurry.
@@ -290,6 +297,11 @@ public class FolioWriting {
                                         if ( requesEntity.get("hrid") instanceof String hridBroken) {
                                             failedHridsInBatch.add(hridBroken);
                                         }
+                                    }
+                                    if ( error.get("shortMessage") instanceof String shortMessage) {
+                                        errorShortMessagesInBatch.add(shortMessage);
+                                    } else {
+                                        errorShortMessagesInBatch.add("No short message in error response.");
                                     }
                                 }
                             }
@@ -311,10 +323,37 @@ public class FolioWriting {
                     writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
                 }
                 writtenIDs.removeAll(failedHridsInBatch);
-                if (failedHridsInBatch.isEmpty())
+                if (failedHridsInBatch.isEmpty()) {
                     Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs);
-                else
+                } else {
+
+                    // Mark failed exports for human scrutiny
+                    for (int j = 0; j < failedHridsInBatch.size(); ++j) {
+                        String failedHrid = failedHridsInBatch.get(j);
+                        String shortMessage = errorShortMessagesInBatch.get(j);
+                        String sql = """
+                                INSERT OR REPLACE INTO export_failures (hrid, short_message, time) VALUES(?, ?, ?);
+                                """;
+                        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                            statement.setString(1, failedHrid);
+                            statement.setString(2, shortMessage);
+                            statement.setString(3, ZonedDateTime.now().toString());
+                            statement.execute();
+                        }
+                    }
+
                     Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs + " The following should have been written but were rejected: " + failedHridsInBatch);
+                }
+                // Clear any previous failed exports that have now resolved.
+                for (String writtenHrid : writtenIDs) {
+                    String sql = """
+                                DELETE FROM export_failures WHERE hrid = ?;
+                                """;
+                    try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                        statement.setString(1, writtenHrid);
+                        statement.execute();
+                    }
+                }
                 batch.clear();
                 return;
             } catch (IOException | URISyntaxException | ParseException e) {

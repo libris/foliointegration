@@ -50,7 +50,7 @@ public class FolioSync {
             }
 
             // Commit state for next pass
-            FolioWriting.flushQueue();
+            FolioWriting.flushQueue(connection);
             if (modified > syncedUntil) {
                 Storage.writeState(SYNCED_UNTIL_KEY, "" + modified, connection);
             }
@@ -123,7 +123,7 @@ public class FolioSync {
             if (export) {
                 // A visible difference. Write it to folio!
                 //Storage.log(" ** WRITE OF: " + mainEntity);
-                FolioWriting.queueForExport(mainEntity);
+                FolioWriting.queueForExport(mainEntity, connection);
                 try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, checksum) VALUES(?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
                     statement.setLong(1, id);
                     statement.setLong(2, checksum);

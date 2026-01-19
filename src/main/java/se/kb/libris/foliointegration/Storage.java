@@ -146,6 +146,18 @@ public class Storage {
         }
         {
             String sql = """
+                    CREATE TABLE export_failures (
+                            hrid TEXT PRIMARY KEY,
+                            short_message TEXT,
+                            time TEXT
+                        );
+                    """.stripIndent();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.execute();
+            }
+        }
+        {
+            String sql = """
                     CREATE INDEX idx_referenced_uris_uri ON referenced_uris(referenced_uri);
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {

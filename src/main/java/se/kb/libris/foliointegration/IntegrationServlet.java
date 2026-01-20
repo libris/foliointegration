@@ -26,6 +26,9 @@ public class IntegrationServlet extends HttpServlet {
                               <div style="border:1px solid black; margin:25px 50px 75px 100px">
                         """.stripIndent();
     private final String outro = """
+                              <hr/>
+                              The full log must be obtained from the file system of the machine/pod running the server. The last bit of the log can be downloaded here: 
+                              <form action='/taillog' method='post'><input type='submit' value='Tail log'></form>
                               </div>
                             </center>
                           </body>
@@ -112,6 +115,13 @@ public class IntegrationServlet extends HttpServlet {
                 response.getOutputStream().write(sb.toString().getBytes(StandardCharsets.UTF_8));
                 break;
             }
+            case "/taillog": {
+                response.setContentType("text/plain");
+                for (String line : Storage.tailLog()) {
+                    response.getOutputStream().write( (line + "\n").getBytes(StandardCharsets.UTF_8));
+                }
+                break;
+            }
             default:
                 Storage.log("Suspicious POST to " + request.getServletPath() + " (ignoring).");
         }
@@ -174,8 +184,8 @@ public class IntegrationServlet extends HttpServlet {
 
                 s = """
                         <form action="/emmtime" method="post">
-                            <label for="emmtime">Reset sync FROM LIBRIS to [everything that changed since] (swedish local time):</lable>
-                            <input id="emmtime" name="emmtime" type="datetime-local"></input>
+                            <label for="emmtime">Reset sync FROM LIBRIS to [everything that changed since] (swedish local time):</label>
+                            <input id="emmtime" name="emmtime" type="datetime-local">
                             <input type="submit" value="Set time">
                         </form>
                         """.stripIndent();
@@ -198,8 +208,8 @@ public class IntegrationServlet extends HttpServlet {
 
                 s = """
                         <form action="/foliotime" method="post">
-                            <label for="foliotime">Reset sync TO FOLIO to [everything that changed since] (swedish local time):</lable>
-                            <input id="foliotime" name="foliotime" type="datetime-local"></input>
+                            <label for="foliotime">Reset sync TO FOLIO to [everything that changed since] (swedish local time):</label>
+                            <input id="foliotime" name="foliotime" type="datetime-local">
                             <input type="submit" value="Set time">
                         </form>
                         """.stripIndent();

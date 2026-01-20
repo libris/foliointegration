@@ -344,7 +344,7 @@ public class FolioWriting {
 
                 Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs + " The following should have been written but were rejected: " + failedHridsInBatch);
             }
-            // Clear any previous failed exports that have now resolved.
+            // Clear any previous failed exports that have now been resolved.
             for (String writtenHrid : writtenIDs) {
                 String sql = """
                             DELETE FROM export_failures WHERE hrid = ?;

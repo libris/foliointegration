@@ -1,9 +1,15 @@
 package se.kb.libris.foliointegration;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.*;
 import java.time.ZonedDateTime;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.sqlite.SQLiteConfig;
@@ -26,28 +32,44 @@ public class Storage {
 
     private static Connection _connection = null;
 
+    private static final LinkedList<String> circularLogBuffer = new LinkedList<>();
+
+    private static void appendToLogln(String line) {
+        System.err.println(line);
+        if (circularLogBuffer.size() >= 500)
+            circularLogBuffer.removeFirst();
+        circularLogBuffer.add(line);
+    }
+
+    public static List<String> tailLog() {
+        return Collections.unmodifiableList(circularLogBuffer);
+    }
+
     public static void log(String message) {
         synchronized (System.err) {
-            System.err.println(ZonedDateTime.now() + ": " + message);
+            appendToLogln(ZonedDateTime.now() + ": " + message);
         }
     }
 
     public static void logWithCallstack(String message) {
         synchronized (System.err) {
-            System.err.println(ZonedDateTime.now() + ": " + message + " at:");
+            appendToLogln(ZonedDateTime.now() + ": " + message + " [logged at]:");
             StackTraceElement[] frames = Thread.currentThread().getStackTrace();
             for (int i = 2; i < frames.length; ++i) {
-                System.err.println(frames[i]);
+                appendToLogln(frames[i].toString());
             }
-            System.err.println("---------------");
+            appendToLogln("---------------");
         }
     }
 
     public static void log(String message, Exception e) {
         synchronized (System.err) {
-            System.err.println(ZonedDateTime.now() + ": " + message);
-            e.printStackTrace(System.err);
-            System.err.println("---------------");
+            appendToLogln(ZonedDateTime.now() + ": " + message + " [caused by]: ");
+            StringWriter stringWriter = new StringWriter(256);
+            e.printStackTrace(new PrintWriter(stringWriter));
+            String stackTrace = stringWriter.toString();
+            appendToLogln(stackTrace.trim());
+            appendToLogln("---------------");
         }
     }
 

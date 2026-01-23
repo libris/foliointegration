@@ -300,6 +300,7 @@ public class FolioWriting {
                                 }
                                 if ( error.get("message") instanceof String message) {
                                     errorMessagesInBatch.add(message);
+                                    Storage.log("FOLIO rejection message: " + message);
                                 } else {
                                     errorMessagesInBatch.add("No message in error response.");
                                 }

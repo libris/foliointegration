@@ -281,7 +281,7 @@ public class FolioWriting {
 
             // These two use the same indexing. Meaning errorShortMessagesInBatch[5] refers to the message received for failedHridsInBatch[5]
             List<String> failedHridsInBatch = new ArrayList<>();
-            List<String> errorShortMessagesInBatch = new ArrayList<>();
+            List<String> errorMessagesInBatch = new ArrayList<>();
 
             if (response.getCode() == 207) { // "Multi-status", mixed response. We need to figure out which records went bad
                 // Need to parse error message per record tried: /errors/N/entity/hrid
@@ -298,10 +298,10 @@ public class FolioWriting {
                                         failedHridsInBatch.add(hridBroken);
                                     }
                                 }
-                                if ( error.get("shortMessage") instanceof String shortMessage) {
-                                    errorShortMessagesInBatch.add(shortMessage);
+                                if ( error.get("message") instanceof String message) {
+                                    errorMessagesInBatch.add(message);
                                 } else {
-                                    errorShortMessagesInBatch.add("No short message in error response.");
+                                    errorMessagesInBatch.add("No message in error response.");
                                 }
                             }
                         }
@@ -330,13 +330,13 @@ public class FolioWriting {
                 // Mark failed exports for human scrutiny
                 for (int j = 0; j < failedHridsInBatch.size(); ++j) {
                     String failedHrid = failedHridsInBatch.get(j);
-                    String shortMessage = errorShortMessagesInBatch.get(j);
+                    String message = errorMessagesInBatch.get(j);
                     String sql = """
                             INSERT OR REPLACE INTO export_failures (hrid, short_message, time) VALUES(?, ?, ?);
                             """;
                     try (PreparedStatement statement = connection.prepareStatement(sql)) {
                         statement.setString(1, failedHrid);
-                        statement.setString(2, shortMessage);
+                        statement.setString(2, message);
                         statement.setString(3, ZonedDateTime.now().toString());
                         statement.execute();
                     }

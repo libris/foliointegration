@@ -89,37 +89,45 @@ public class Server {
 
         // The main loop
         while (true) {
-            Connection connection = Storage.getConnection();
-            Storage.APPLICATION_STATE state = Storage.getApplicationState(connection);
+            try {
+                Connection connection = Storage.getConnection();
+                Storage.APPLICATION_STATE state = Storage.getApplicationState(connection);
 
-            switch (state) {
-                case INITIAL_LOAD_FROM_LIBRIS:
-                    EmmDumpImport.run();
-                    break;
-                case STAYING_IN_SYNC: {
+                switch (state) {
+                    case INITIAL_LOAD_FROM_LIBRIS:
+                        EmmDumpImport.run();
+                        break;
+                    case STAYING_IN_SYNC: {
 
-                    // synchronized with the requestChanged*Time-stuff above
-                    synchronized (Server.class) {
-                        if (requestedNewEmmTime != 0) {
-                            Storage.writeState(EmmSync.SYNCED_UNTIL_KEY, "" + requestedNewEmmTime, connection);
-                            Storage.log("EMM sync time MANUALLY changed to: " + requestedNewEmmTime);
-                            requestedNewEmmTime = 0;
+                        // synchronized with the requestChanged*Time-stuff above
+                        synchronized (Server.class) {
+                            if (requestedNewEmmTime != 0) {
+                                Storage.writeState(EmmSync.SYNCED_UNTIL_KEY, "" + requestedNewEmmTime, connection);
+                                Storage.log("EMM sync time MANUALLY changed to: " + requestedNewEmmTime);
+                                requestedNewEmmTime = 0;
+                            }
+                            if (requestedNewFolioTime != 0) {
+                                Storage.writeState(FolioSync.SYNCED_UNTIL_KEY, "" + requestedNewFolioTime, connection);
+                                Storage.log("FOLIO sync time MANUALLY changed to: " + requestedNewFolioTime);
+                                requestedNewFolioTime = 0;
+                            }
                         }
-                        if (requestedNewFolioTime != 0) {
-                            Storage.writeState(FolioSync.SYNCED_UNTIL_KEY, "" + requestedNewFolioTime, connection);
-                            Storage.log("FOLIO sync time MANUALLY changed to: " + requestedNewFolioTime);
-                            requestedNewFolioTime = 0;
-                        }
-                    }
 
-                    boolean runAgainImmediately = false;
-                    runAgainImmediately |= EmmSync.run();
-                    runAgainImmediately |= FolioSync.run();
-                    if (!runAgainImmediately) {
-                        Thread.sleep(100);
+                        boolean runAgainImmediately = false;
+                        runAgainImmediately |= EmmSync.run();
+                        runAgainImmediately |= FolioSync.run();
+                        if (!runAgainImmediately) {
+                            Thread.sleep(100);
+                        }
+                        break;
                     }
-                    break;
                 }
+            } catch (Exception e) {
+                // Outermost catch all, or we crash (on runtime exceptions)
+                Storage.log("Iteration failed (will retry in 5 seconds).", e);
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ie) { /* ignore */ }
             }
         }
 

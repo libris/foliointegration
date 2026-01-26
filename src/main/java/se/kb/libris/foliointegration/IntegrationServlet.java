@@ -27,7 +27,7 @@ public class IntegrationServlet extends HttpServlet {
                         """.stripIndent();
     private final String outro = """
                               <hr/>
-                              The full log must be obtained from the file system of the machine/pod running the server. The last bit of the log can be downloaded here: 
+                              The full log must be obtained from the machine/pod running the server. The last bit of the log can be downloaded here: 
                               <form action='/taillog' method='post'><input type='submit' value='Tail log'></form>
                               </div>
                             </center>
@@ -208,7 +208,7 @@ public class IntegrationServlet extends HttpServlet {
 
                 s = """
                         <form action="/foliotime" method="post">
-                            <label for="foliotime">Reset sync TO FOLIO to [everything that changed since] (swedish local time):</label>
+                            <label for="foliotime">Reset sync TO FOLIO to [everything that was synced from LIBRIS since] (swedish local time):</label>
                             <input id="foliotime" name="foliotime" type="datetime-local">
                             <input type="submit" value="Set time">
                         </form>

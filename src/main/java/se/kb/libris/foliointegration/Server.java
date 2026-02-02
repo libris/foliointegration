@@ -58,8 +58,6 @@ public class Server {
         return requestedNewFolioTime;
     }
 
-    public static CloseableHttpClient httpClient = HttpClientBuilder.create().build();
-
     public static void main(String[] args) throws Exception {
 
         var server = createServer();

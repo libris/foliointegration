@@ -4,6 +4,8 @@ import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.classic.methods.HttpPut;
 import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.ParseException;
@@ -66,7 +68,7 @@ public class FolioWriting {
                 return folioToken;
 
             for (int i = 0; i < 10; ++i) {
-                try {
+                try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
                     URI uri = new URI(folioBaseUri);
                     uri = uri.resolve("/authn/login-with-expiry");
                     var requestBodyMap = Map.of("tenant", folioTenant, "username", username, "password", password);
@@ -83,7 +85,7 @@ public class FolioWriting {
                     StringEntity entity = new StringEntity(requestBody);
                     request.setEntity(entity);
 
-                    ClassicHttpResponse response = Server.httpClient.execute(request);
+                    ClassicHttpResponse response = httpClient.execute(request);
                     Header[] headers = response.getHeaders();
                     for (Header header : headers) {
                         if (header.getValue().startsWith("folioAccessToken")) {
@@ -121,7 +123,7 @@ public class FolioWriting {
         String token = getToken();
 
         for (int i = 0; i < 20; ++i) {
-            try {
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
                 URI uri = new URI(folioBaseUri);
                 uri = uri.resolve(pathAndParameters);
@@ -134,7 +136,7 @@ public class FolioWriting {
                 request.setHeader("Accept", "application/json");
                 request.setHeader("Cookie", token);
 
-                ClassicHttpResponse response = Server.httpClient.execute(request);
+                ClassicHttpResponse response = httpClient.execute(request);
                 String responseText = EntityUtils.toString(response.getEntity());
 
                 if (response.getCode() != 200) {
@@ -238,7 +240,7 @@ public class FolioWriting {
         String body = Storage.mapper.writeValueAsString(recordSet);
 
 
-        try {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
             // Throttle if necessary
             while (true) {
@@ -276,7 +278,7 @@ public class FolioWriting {
             request.setHeader("Content-type", "application/json");
             request.setHeader("Cookie", token);
 
-            ClassicHttpResponse response = Server.httpClient.execute(request);
+            ClassicHttpResponse response = httpClient.execute(request);
             String responseText = EntityUtils.toString(response.getEntity());
 
             // These two use the same indexing. Meaning errorShortMessagesInBatch[5] refers to the message received for failedHridsInBatch[5]

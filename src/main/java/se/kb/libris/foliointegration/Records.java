@@ -2,6 +2,8 @@ package se.kb.libris.foliointegration;
 
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.ParseException;
@@ -212,7 +214,7 @@ public class Records {
 
     public static String downloadJsonLdWithRetry(String uri) {
         for (int i = 0; i < 5; ++i) {
-            try {
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
                 HttpGet request = new HttpGet(uri);
                 URI uriWithParam = new URIBuilder(request.getUri() )
                         .addParameter("computedLabel", "sv")
@@ -224,7 +226,7 @@ public class Records {
                         .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
                 request.setConfig(config);
                 request.setHeader("accept", "application/json+ld");
-                ClassicHttpResponse response = Server.httpClient.execute(request);
+                ClassicHttpResponse response = httpClient.execute(request);
 
                 boolean isJsonld = false;
                 for (Header header : response.getHeaders("Content-Type")) {

@@ -2,6 +2,8 @@ package se.kb.libris.foliointegration;
 
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
@@ -40,7 +42,7 @@ public class EmmSync {
             newUntilTarget = now;
 
         URI uri = null;
-        try {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
             uri = new URI(System.getenv("EMM_BASE_URL")).resolve("?until=" + newUntilTarget);
             boolean foundAlreadyTakenChange = false;
             while (uri != null) {
@@ -50,7 +52,7 @@ public class EmmSync {
                         .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
                 request.setConfig(config);
                 request.setHeader("accept", "application/json+ld");
-                ClassicHttpResponse response = Server.httpClient.execute(request);
+                ClassicHttpResponse response = httpClient.execute(request);
                 String responseString = EntityUtils.toString(response.getEntity());
                 Map responseMap = Storage.mapper.readValue(responseString, Map.class);
 

@@ -16,6 +16,8 @@ import com.schibsted.spt.data.jslt.Parser;
 import com.schibsted.spt.data.jslt.Expression;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
@@ -112,7 +114,7 @@ public class Format {
         String itemJsltUrl = System.getenv("ITEM_JSLT_URL");
         boolean changed = false;
 
-        try {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
             // Get instance conversion
             {
@@ -121,7 +123,7 @@ public class Format {
                 RequestConfig config = RequestConfig.custom()
                         .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
                 request.setConfig(config);
-                ClassicHttpResponse response = Server.httpClient.execute(request);
+                ClassicHttpResponse response = httpClient.execute(request);
                 String responseText = EntityUtils.toString(response.getEntity());
                 if (response.getCode() != 200) {
                     Storage.log("Failed JSLT (instance) lookup: " + response);
@@ -143,7 +145,7 @@ public class Format {
                 RequestConfig config = RequestConfig.custom()
                         .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
                 request.setConfig(config);
-                ClassicHttpResponse response = Server.httpClient.execute(request);
+                ClassicHttpResponse response = httpClient.execute(request);
                 String responseText = EntityUtils.toString(response.getEntity());
                 if (response.getCode() != 200) {
                     Storage.log("Failed JSLT (item) lookup: " + response);

@@ -2,6 +2,8 @@ package se.kb.libris.foliointegration;
 
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
@@ -212,14 +214,14 @@ public class EmmDumpImport {
 
             Thread.ofPlatform().name("EMM prefetch").start(new Runnable() {
                 public void run() {
-                    try {
+                    try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
                         HttpGet request = new HttpGet(uri);
                         RequestConfig config = RequestConfig.custom()
                                 .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
 
                         request.setConfig(config);
                         request.setHeader("accept", "application/json+ld");
-                        Server.httpClient.execute(request, response -> {
+                        httpClient.execute(request, response -> {
                             String bodyAsString = EntityUtils.toString(response.getEntity());
                             prefetchedPages.put( uri.toString(), Storage.mapper.readValue(bodyAsString, Map.class) );
                             return response;
@@ -271,15 +273,16 @@ public class EmmDumpImport {
     }
 
     private static void startIfNotStarted() throws SQLException{
-        try {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
             URI uri = new URI(System.getenv("EMM_BASE_URL")).resolve("full?selection=itemAndInstance:" + sigel + "&offset=0&computedLabel=sv");
             HttpGet request = new HttpGet(uri);
             RequestConfig config = RequestConfig.custom()
                     .setConnectionRequestTimeout(Timeout.ofSeconds(15)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
             request.setConfig(config);
             request.setHeader("accept", "application/json+ld");
-            ClassicHttpResponse response = Server.httpClient.execute(request);
+            ClassicHttpResponse response = httpClient.execute(request);
             String responseText = EntityUtils.toString(response.getEntity());
+
             Map<?, ?> responseMap = Storage.mapper.readValue(responseText, Map.class);
 
             if (responseMap.containsKey("startTime")) {

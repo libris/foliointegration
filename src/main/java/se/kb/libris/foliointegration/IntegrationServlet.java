@@ -147,6 +147,62 @@ public class IntegrationServlet extends HttpServlet {
         }
 
         try {
+
+            // Health check?
+            String path = request.getServletPath();
+            if (path.endsWith("health") || path.endsWith("health/")) {
+                OutputStream os = response.getOutputStream();
+
+                // FAR behind on the sync?
+                long maxBehind = 0;
+                {
+                    String untilString = Storage.getState(EmmSync.SYNCED_UNTIL_KEY, readOnlyConnection);
+                    if (untilString != null) {
+                        long syncedUntil = Long.parseLong(untilString);
+                        long now = Instant.now().toEpochMilli();
+                        maxBehind = (now - syncedUntil) / 1000;
+                    }
+                }
+
+                {
+                    String untilString = Storage.getState(FolioSync.SYNCED_UNTIL_KEY, readOnlyConnection);
+                    if (untilString != null) {
+                        long syncedUntil = Long.parseLong(untilString);
+                        long now = Instant.now().toEpochMilli();
+                        maxBehind = Long.max(maxBehind, (now - syncedUntil) / 1000);
+                    }
+                }
+                if (maxBehind > 60 * 20) { // More than 20 minutes?
+                    os.write("ERROR".getBytes(StandardCharsets.UTF_8));
+                    response.setStatus(200);
+                    return;
+                }
+
+                // Records rejected by FOLIO?
+                String exportFailureCount = "";
+                String sql = """
+                    SELECT COUNT(hrid) FROM export_failures;
+                    """;
+                try (PreparedStatement statement = readOnlyConnection.prepareStatement(sql)) {
+                    statement.execute();
+                    try(ResultSet resultSet = statement.getResultSet()) {
+                        if (resultSet.next()) {
+                            exportFailureCount = resultSet.getString(1);
+                        }
+                    }
+                }
+                if (!exportFailureCount.equals("0")) {
+                    os.write("WARNING".getBytes(StandardCharsets.UTF_8));
+                    response.setStatus(200);
+                    return;
+                }
+
+                // Otherwise OK I guess.
+                os.write("OK".getBytes(StandardCharsets.UTF_8));
+                response.setStatus(200);
+                return;
+            }
+
             var majorState = Storage.getApplicationState(readOnlyConnection);
             switch (majorState) {
                 case INITIAL_LOAD_FROM_LIBRIS:

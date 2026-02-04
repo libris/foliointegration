@@ -22,6 +22,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -341,6 +342,10 @@ public class FolioWriting {
                         statement.setString(1, failedHrid);
                         statement.setString(2, message);
                         statement.setString(3, ZonedDateTime.now().toString());
+                        statement.execute();
+                    }
+                    try (PreparedStatement statement = connection.prepareStatement("DELETE FROM exported_checksum WHERE hrid = ?")) {
+                        statement.setString(1, failedHrid);
                         statement.execute();
                     }
                 }

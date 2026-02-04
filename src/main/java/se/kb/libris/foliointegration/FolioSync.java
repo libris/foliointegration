@@ -106,7 +106,10 @@ public class FolioSync {
             Records.embellishWithLocalData(mainEntity, new HashSet<>(), connection);
             mainEntity = Format.formatForFolio(mainEntity, connection);
             long checksum = calculateCheckSum(mainEntity);
-            // TODO: Use the INSTANCE id for these instead, to avoid writing the instance multiple times on the first go (if there are multiple holdings)
+
+            // Note that this HRID is for the instance, and not the selected item.
+            String hrid = (String) ((Map)mainEntity.get("instance")).get("hrid");
+
             boolean export = true; // assumption
             try (PreparedStatement statement = connection.prepareStatement("SELECT checksum FROM exported_checksum WHERE entity_id = ?")) {
                 statement.setLong(1, id);
@@ -124,9 +127,10 @@ public class FolioSync {
                 // A visible difference. Write it to folio!
                 //Storage.log(" ** WRITE OF: " + mainEntity);
                 FolioWriting.queueForExport(mainEntity, connection);
-                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, checksum) VALUES(?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
+                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, hrid, checksum) VALUES(?, ?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
                     statement.setLong(1, id);
-                    statement.setLong(2, checksum);
+                    statement.setString(2, hrid);
+                    statement.setLong(3, checksum);
                     statement.execute();
                 }
             }

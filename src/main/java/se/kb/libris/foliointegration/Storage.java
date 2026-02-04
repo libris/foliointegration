@@ -157,6 +157,7 @@ public class Storage {
                     CREATE TABLE exported_checksum (
                             id INTEGER PRIMARY KEY,
                             entity_id INTEGER,
+                            hrid TEXT,
                             checksum INTEGER,
                             UNIQUE(entity_id),
                             FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
@@ -181,6 +182,14 @@ public class Storage {
         {
             String sql = """
                     CREATE INDEX idx_referenced_uris_uri ON referenced_uris(referenced_uri);
+                    """.stripIndent();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.execute();
+            }
+        }
+        {
+            String sql = """
+                    CREATE INDEX idx_export_checksum_hrid ON exported_checksum(hrid);
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.execute();

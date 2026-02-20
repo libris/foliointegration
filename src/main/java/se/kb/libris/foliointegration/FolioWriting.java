@@ -296,14 +296,16 @@ public class FolioWriting {
                     if ( responseMap.get("errors") instanceof List errors) {
                         for (Object o : errors) {
                             if ( o instanceof Map error) {
+                                //Storage.log("FOLIO rejection: " + Storage.mapper.writeValueAsString(error) );
+                                Storage.log("FOLIO rejection: " + Storage.mapper.writeValueAsString(error.get("message")) );
+
                                 if ( error.get("entity") instanceof Map requesEntity) {
                                     if ( requesEntity.get("hrid") instanceof String hridBroken) {
                                         failedHridsInBatch.add(hridBroken);
                                     }
                                 }
-                                if ( error.get("message") instanceof String message) {
-                                    errorMessagesInBatch.add(message);
-                                    Storage.log("FOLIO rejection: " + Storage.mapper.writeValueAsString(error) );
+                                if ( error.get("message") != null) {
+                                    errorMessagesInBatch.add(Storage.mapper.writeValueAsString(error.get("message")));
                                 } else {
                                     errorMessagesInBatch.add("No message in error response.");
                                 }

@@ -153,6 +153,15 @@ public class EmmSync {
                                 Map mainEntity = graphList.get(1);
                                 mainEntity.put( "meta", recordEntity );
                                 Records.writeRecord(mainEntity, connection);
+
+                                // An update may also drag in new dependencies we need to go get.
+                                Set<String> dependenciesToDownload = Records.collectUrisReferencedByThisRecord(mainEntity);
+                                Records.filterUrisWeAlreadyHave(dependenciesToDownload, connection);
+                                List<Map> dependencies = Records.downloadDependencies(dependenciesToDownload, new HashSet<>(), connection);
+                                for (Map dependency : dependencies) {
+                                    Records.writeRecord(dependency, connection);
+                                }
+
                                 Storage.log("Taking relevant EMM update: " + activityObject.get("id"));
                                 changesMade = true;
                             }

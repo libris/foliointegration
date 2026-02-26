@@ -125,7 +125,7 @@ public class Records {
         switch (node) {
             case List l: {
                 for (Object o : l) {
-                    embellishWithLocalData(o, cycleProtection, connection);
+                    embellishWithLocalData(o, new HashSet<>(cycleProtection), connection);
                 }
                 break;
             }
@@ -151,8 +151,8 @@ public class Records {
                     }
                 }
                 for (Object k : m.keySet()) {
-                    if (!k.equals("narrower") && !k.equals("broader") && !k.equals("@reverse"))
-                        embellishWithLocalData(m.get(k), cycleProtection, connection);
+                    if (propertiesOfInterest.contains(k))
+                        embellishWithLocalData(m.get(k), new HashSet<>(cycleProtection), connection);
                 }
                 break;
             }

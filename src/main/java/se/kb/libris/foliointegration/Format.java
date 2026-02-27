@@ -3,6 +3,8 @@ package se.kb.libris.foliointegration;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -12,6 +14,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import com.schibsted.spt.data.jslt.Function;
 import com.schibsted.spt.data.jslt.Parser;
 import com.schibsted.spt.data.jslt.Expression;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
@@ -253,6 +257,25 @@ public class Format {
         return null;
     }
 
+    public static class ExposedDecodeFunction implements Function {
+        public String getName() {
+            return "urldecode";
+        }
+
+        public int getMinArguments() {
+            return 1;
+        }
+
+        public int getMaxArguments() {
+            return 1;
+        }
+
+        public JsonNode call(JsonNode input, JsonNode[] params) {
+            String encoded = params[0].asText();
+            return new TextNode(URLDecoder.decode(encoded, StandardCharsets.UTF_8));
+        }
+    }
+
     public static Map formatForFolio(Map originalRootHolding, Connection connection) throws SQLException, IOException {
 
         // Minimum required properties (by FOLIO): "instance" object with [ "source", "title", "instanceTypeId", "hrid" ] as determined by the json-schema.
@@ -272,7 +295,8 @@ public class Format {
                 }
                 """);*/
         //Expression instanceJSLT = new Parser(new StringReader(instanceJsltConversion)).withObjectFilter(". != {} and . != []").compile(); // Leave nulls in place, but remove empty arrays/object
-        Expression instanceJSLT = Parser.compileString(instanceJsltConversion);
+        Collection<Function> functions = Collections.singleton(new ExposedDecodeFunction());
+        Expression instanceJSLT = Parser.compileString(instanceJsltConversion, functions);
 
         /*Expression holdingsJSLT = Parser.compileString("""
                 let root = (.)
@@ -287,7 +311,7 @@ public class Format {
                 ]
                 """);*/
         //Expression holdingsJSLT = new Parser(new StringReader(itemJsltConversion)).withObjectFilter(". != {} and . != []").compile(); // Leave nulls in place, but remove empty arrays/object
-        Expression holdingsJSLT = Parser.compileString(itemJsltConversion);
+        Expression holdingsJSLT = Parser.compileString(itemJsltConversion, functions);
 
         Map originalMainEntity = (Map) originalRootHolding.get("itemOf");
 

@@ -249,8 +249,19 @@ public class Format {
 
         } else if (node instanceof List) {
             List list = (List) node;
-            for (Object element : list) {
-                jsltFolioLookup(element, JSLTKey, lookupMap);
+            String guid = null;
+            Iterator it =  list.iterator();
+            while (it.hasNext()) {
+                Object element = it.next();
+
+                String result = jsltFolioLookup(element, JSLTKey, lookupMap);
+                if (result != null) {
+                    guid = result;
+                    it.remove();
+                }
+            }
+            if (guid != null) {
+                list.add(guid);
             }
         }
 

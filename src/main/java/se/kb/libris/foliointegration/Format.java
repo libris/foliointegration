@@ -43,6 +43,7 @@ public class Format {
     static Map<String, String> electronicAccessRelationshipToGuid = new HashMap<>();
 
     static String instanceJsltConversion = null;
+    static String holdingJsltConversion = null;
     static String itemJsltConversion = null;
     static Instant lastJsltUpdate = Instant.ofEpochMilli(0);
     static {
@@ -147,12 +148,9 @@ public class Format {
             return false;
         lastJsltUpdate = now;
 
-        //String instanceJsltUrl = "https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt";
-        //String itemJsltUrl = "https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt";
-
         String instanceJsltUrl = System.getenv("INSTANCE_JSLT_URL");
+        String holdingJsltUrl = System.getenv("HOLDING_JSLT_URL");
         String itemJsltUrl = System.getenv("ITEM_JSLT_URL");
-        boolean changed = false;
 
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
@@ -174,6 +172,28 @@ public class Format {
                     if (instanceJsltConversion == null || !instanceJsltConversion.equals(responseText)) {
                         instanceJsltConversion = responseText;
                         Storage.log("Obtained a new set of conversion rules (instance).");
+                    }
+                }
+            }
+
+            // Get holding conversion
+            {
+                URI uri = new URI(holdingJsltUrl);
+                HttpGet request = new HttpGet(uri);
+                RequestConfig config = RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                request.setConfig(config);
+                ClassicHttpResponse response = httpClient.execute(request);
+                String responseText = EntityUtils.toString(response.getEntity());
+                if (response.getCode() != 200) {
+                    Storage.log("Failed JSLT (holding) lookup: " + response);
+                    return false;
+                }
+
+                if (responseText != null) {
+                    if (holdingJsltConversion == null || !holdingJsltConversion.equals(responseText)) {
+                        holdingJsltConversion = responseText;
+                        Storage.log("Obtained a new set of conversion rules (holding).");
                     }
                 }
             }
@@ -208,7 +228,7 @@ public class Format {
         return true;
     }
 
-    private static List<Map> getItems(String mainEntityUri, Connection connection) throws SQLException, IOException {
+    private static List<Map> getHoldings(String mainEntityUri, Connection connection) throws SQLException, IOException {
         String sql = """
                 SELECT
                 	entities.entity
@@ -317,37 +337,11 @@ public class Format {
         // Minimum required properties (by FOLIO): "instance" object with [ "source", "title", "instanceTypeId", "hrid" ] as determined by the json-schema.
         // See https://github.com/folio-org/mod-inventory-update/blob/master/ramls/inventory-record-set-with-hrids.json
 
-        /*Expression instanceJSLT = Parser.compileString("""
-                let titles = .hasTitle
-                let mainTitles = [ for ($titles) if (.mainTitle) .mainTitle ]
-                let mainTitle = $mainTitles[0]
-                
-                {
-                    "source" : "LIBRIS",
-                    "hrid" : .meta.controlNumber,
-                    "title" : $mainTitle,
-                    "sourceUri" : get-key(., "@id"),
-                    "instanceTypeId": { "__FOLIO_LOOKUP_TYPE_GUID" : "unspecified" }
-                }
-                """);*/
         //Expression instanceJSLT = new Parser(new StringReader(instanceJsltConversion)).withObjectFilter(". != {} and . != []").compile(); // Leave nulls in place, but remove empty arrays/object
         Collection<Function> functions = Collections.singleton(new ExposedDecodeFunction());
         Expression instanceJSLT = Parser.compileString(instanceJsltConversion, functions);
-
-        /*Expression holdingsJSLT = Parser.compileString("""
-                let root = (.)
-                
-                [
-                    for ( zip-with-index(.hasComponent) ) if ( not ( contains( "BESTÄLLD", .shelfMark.label ) ) )
-                        {
-                            "hrid" : get-key($root, "@id") + "-" + .index,
-                            "permanentLocationId": { "__FOLIO_LOOKUP_LOCATION_GUID" : "Referensbiblioteket" },
-                            "sourceId" : "7c764b4a-cce2-47ff-b64a-3aa3897a26a0"
-                        }
-                ]
-                """);*/
-        //Expression holdingsJSLT = new Parser(new StringReader(itemJsltConversion)).withObjectFilter(". != {} and . != []").compile(); // Leave nulls in place, but remove empty arrays/object
-        Expression holdingsJSLT = Parser.compileString(itemJsltConversion, functions);
+        Expression holdingJSLT = Parser.compileString(holdingJsltConversion, functions);
+        Expression itemsJSLT = Parser.compileString(itemJsltConversion, functions);
 
         Map originalMainEntity = (Map) originalRootHolding.get("itemOf");
 
@@ -357,26 +351,37 @@ public class Format {
         jsltFolioLookups(jsltModifiedInstance);
 
 
-        List<Map> allItems = getItems( (String) originalMainEntity.get("@id"), connection);
-        List folioItems = null;
-        for (Map item : allItems) {
+        List<Map> allLibrisHoldings = getHoldings( (String) originalMainEntity.get("@id"), connection);
+        List<Map> folioHoldings = new ArrayList<>(allLibrisHoldings.size());
+
+        for (Map item : allLibrisHoldings) {
             // embed the instance, to make instance-info available during JSLT-transform.
             item.put("itemOf", originalMainEntity);
 
             JsonNode holdingsJsonNodeOriginal = Storage.mapper.valueToTree(item);
-            JsonNode holdingsJsonNodeTransformed = holdingsJSLT.apply(holdingsJsonNodeOriginal);
-            folioItems = Storage.mapper.treeToValue(holdingsJsonNodeTransformed, List.class);
+            JsonNode holdingsJsonNodeTransformed = holdingJSLT.apply(holdingsJsonNodeOriginal);
+            Map folioHolding = Storage.mapper.treeToValue(holdingsJsonNodeTransformed, Map.class);
+
+            List<Map> folioItems = new ArrayList<>();
+            if (item.containsKey("hasComponent")) {
+                JsonNode itemsJsonNodeTransformed = itemsJSLT.apply(holdingsJsonNodeOriginal);
+                //Storage.log(Storage.mapper.writeValueAsString(itemsJsonNodeTransformed));
+                folioItems.addAll(Storage.mapper.treeToValue(itemsJsonNodeTransformed, List.class));
+                folioHolding.put("items", folioItems);
+            }
+
+            folioHoldings.add( folioHolding );
         }
-        jsltFolioLookups(folioItems);
+        jsltFolioLookups(folioHoldings);
 
         Map converted = new HashMap();
         converted.put("instance", jsltModifiedInstance);
 
         // No holdings? Empty list, not null!
-        if (folioItems == null)
-            folioItems = new ArrayList();
+        if (folioHoldings == null)
+            folioHoldings = new ArrayList();
 
-        converted.put("holdingsRecords", folioItems);
+        converted.put("holdingsRecords", folioHoldings);
 
         //Storage.log(" ** CONVERTED INTO: " + converted);
 

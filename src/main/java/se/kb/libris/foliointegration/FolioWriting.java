@@ -226,7 +226,8 @@ public class FolioWriting {
 
 
         // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
-        /*if (1 == 1) {
+        /*Storage.log("BATCH FIRST:  " + Storage.mapper.writeValueAsString( batch.getFirst() ) );
+        if (1 == 1) {
             List<String> writtenIDs = new ArrayList<>();
             for (Map record : batch) {
                 writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );

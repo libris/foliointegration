@@ -127,10 +127,21 @@ public class EmmSync {
 
                             Records.writeRecord(mainEntity, connection);
 
+                            // When ever a new holding is created, we need to record this. Since we only store the latest
+                            // version of every record, we might otherwise lose the information that this record is NEW
+                            // before we sync it to FOLIO, if it is updated shortly after creation.
+                            String sql = """
+                            INSERT OR REPLACE INTO holding_creations (hrid) VALUES(?);
+                            """;
+                            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                                statement.setString(1, (String) mainEntity.get("@id"));
+                                statement.execute();
+                            }
+
                             for (Map dependency : dependencies) {
                                 Records.writeRecord(dependency, connection);
                             }
-                            Storage.log("Taking relevant EMM creation: " + libraryCode + " " + activityObject.get("id"));
+                            Storage.log("Taking relevant EMM creation: " + libraryCode + " " + activityObject.get("id") + " (now marked for item-creation).");
                             changesMade = true;
                         }
                     }

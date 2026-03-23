@@ -213,6 +213,63 @@ public class FolioWriting {
         }
     }
 
+    /*
+    This is a huge complication, due to the fact that we have to "create items" in folio, but only once, after the
+    creation of a holding record. This is very att odds with the rest of the system, which is built to *keep things
+    up date*.
+
+    The way this works is that when an EMM creation event (of one of our holdings) is detected, it gets put in table
+    of its own, 'holding_creations'. Items are then "always created" in formatting, even on updates, because otherwise
+    the checksum system wouldn't work. But only if a holding has its ID in the holding_creations-table will we actually
+    write those items to folio. This function clears out the items for any of the batched records it is passed that DOES
+    NOT have the correct holding ID in 'holding_creations', so that we do not create new items. It also returns
+    something like the following:
+        {
+          "instanceHRID1": ["holdingHRID1", "holdingHRID1"]
+        }
+    Meaning: If instanceHRID1 is written successfully, consider holdingHRID1 and holdingHRID2 to have created their
+    items (which CANNOT EVER BE ALLOWED to happen more than once).
+
+    This is because instances, holdings and items are written together in one go. And the instance ID is the one we
+    will know succeeded or failed. So after a successful write, we check instanceIDs written against the list returned
+    from here, and then clear all of the associated holdingIDs from 'holding_creations', so that we only create these
+    items exactly once.
+     */
+    private static HashMap<String, ArrayList<String>> clearExamplesUnlessAllowed(List<Map> instancesToBeWritten, Connection connection) throws SQLException {
+        var instanceHRIDsToHoldingsHRIDsWithItems = new HashMap<String, ArrayList<String>>();
+        for (Map folioInstance : instancesToBeWritten) {
+
+            ArrayList<String> holdingHRIDsWithItems = new ArrayList<>();
+            String instanceHRID = (String) ((Map)folioInstance.get("instance")).get("hrid");
+            instanceHRIDsToHoldingsHRIDsWithItems.put(instanceHRID, holdingHRIDsWithItems);
+
+            if (folioInstance.containsKey("holdingsRecords")) {
+                for (Map folioHolding : (List<Map>) folioInstance.get("holdingsRecords")) {
+
+                    boolean shouldCreateItems = false;
+                    try (PreparedStatement statement = connection.prepareStatement("SELECT hrid FROM holding_creations WHERE hrid = ?")) {
+                        statement.setString(1, (String) folioHolding.get("hrid"));
+                        statement.execute();
+                        try (ResultSet resultSet = statement.getResultSet()) {
+                            if (resultSet.next()) {
+                                shouldCreateItems = true;
+                            }
+                        }
+                    }
+                    if (!shouldCreateItems) {
+                        folioHolding.remove("items");
+                        //Storage.log("Filtering items of " + folioHolding.get("hrid") + " because no found creation-event.");
+                    } else {
+                        Storage.log("Allowing the creation of " + ( (List) folioHolding.get("items") ).size() + " items for " + folioHolding.get("hrid"));
+                        String holdingHRID = (String) folioHolding.get("hrid");
+                        holdingHRIDsWithItems.add(holdingHRID);
+                    }
+                }
+            }
+        }
+        return instanceHRIDsToHoldingsHRIDsWithItems;
+    }
+
     public static synchronized void flushQueue(Connection connection) throws IOException, InterruptedException, SQLException {
 
         // All HRID lookups must have concluded before flushing is possible
@@ -224,9 +281,11 @@ public class FolioWriting {
         if (batch.isEmpty())
             return;
 
+        HashMap<String, ArrayList<String>> instanceHRIDsToHoldingsHRIDsWithItems = clearExamplesUnlessAllowed(batch, connection);
 
+        //Storage.log("BATCH FIRST:  " + Storage.mapper.writeValueAsString( batch.getFirst() ) );
         // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
-        /*Storage.log("BATCH FIRST:  " + Storage.mapper.writeValueAsString( batch.getFirst() ) );
+        /*
         if (1 == 1) {
             List<String> writtenIDs = new ArrayList<>();
             for (Map record : batch) {
@@ -355,14 +414,30 @@ public class FolioWriting {
 
                 Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs + " The following should have been written but were rejected: " + failedHridsInBatch);
             }
-            // Clear any previous failed exports that have now been resolved.
+
             for (String writtenHrid : writtenIDs) {
+                // Clear any previous failed exports that have now been resolved.
                 String sql = """
                             DELETE FROM export_failures WHERE hrid = ?;
                             """;
                 try (PreparedStatement statement = connection.prepareStatement(sql)) {
                     statement.setString(1, writtenHrid);
                     statement.execute();
+                }
+
+                // Clear any entries in the holding_creations table, if we WROTE an instance containing ITEMS (which we cannot ever do more than once per created holding)
+                if (instanceHRIDsToHoldingsHRIDsWithItems.containsKey(writtenHrid)) {
+                    List<String> holdingHRIDs = instanceHRIDsToHoldingsHRIDsWithItems.get(writtenHrid);
+                    for (String holdingHRIDwithItemsWritten : holdingHRIDs) {
+                        sql = """
+                                DELETE FROM holding_creations WHERE hrid = ?;
+                                """;
+                        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                            statement.setString(1, holdingHRIDwithItemsWritten);
+                            statement.execute();
+                        }
+                        Storage.log("Cleared holding hrid: " + holdingHRIDwithItemsWritten + " from the item creation queue. Items for this holding have now been created and should never be created again.");
+                    }
                 }
             }
             batch.clear();

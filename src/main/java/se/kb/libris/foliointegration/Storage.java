@@ -181,6 +181,16 @@ public class Storage {
         }
         {
             String sql = """
+                    CREATE TABLE holding_creations (
+                            hrid TEXT PRIMARY KEY
+                        );
+                    """.stripIndent();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.execute();
+            }
+        }
+        {
+            String sql = """
                     CREATE INDEX idx_referenced_uris_uri ON referenced_uris(referenced_uri);
                     """.stripIndent();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {

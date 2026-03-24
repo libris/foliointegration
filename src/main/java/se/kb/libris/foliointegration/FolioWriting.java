@@ -201,7 +201,17 @@ public class FolioWriting {
     }
 
     public static synchronized void queueForExport(Map _folioRecord, Connection connection) throws IOException, InterruptedException, SQLException {
+        // Make a copy, as we will be making some slight changes in there
         HashMap folioRecord = new HashMap(_folioRecord);
+
+
+        folioRecord.put("processing",
+                        Map.of("item",
+                                Map.of("retainOmittedRecord", new HashMap())
+                        ));
+
+        //Storage.log(" LIKE THIS: " + Storage.mapper.writeValueAsString(folioRecord) + "\n\n");
+
         batch.add(folioRecord);
 
         // We no longer need to do this, since redefining folio HRIDS as Libris control numbers.
@@ -285,8 +295,8 @@ public class FolioWriting {
 
         //Storage.log("BATCH FIRST:  " + Storage.mapper.writeValueAsString( batch.getFirst() ) );
         // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
-        /*
-        if (1 == 1) {
+
+        /*if (1 == 1) {
             List<String> writtenIDs = new ArrayList<>();
             for (Map record : batch) {
                 writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );

@@ -29,8 +29,13 @@ order. Both of these timestamps can be changed dynamically from the GUI (served 
 application), which lets you control for example if some set of changes  should be written again, or some other set of
 changes should be skipped.
 
-The application never leaves the synchronization state once entered. Closing/killing/restarting the application can be done
-freely at any time (including during dump-downloading).
+The application never leaves the synchronization state once entered. In regards to synching records, closing/killing/restarting of the application can be done
+freely at any time (including during dump-downloading). The one theoretical risk in this, is the case where a new item has
+been created in FOLIO and the transaction (within this application) that says this is done has not yet been commited.
+Should you manage to kill the application inside this (very small) window of time, there is a risk of items being created
+again upon restarting. This is a risk that cannot ever be fully eliminated. If preventing this is *critical* to you, the
+suggested solution is to cut the EMM network access of this application first (and then waiting a little), so that no new
+item creations can be queued while you are shutting down.
 
 
 ## Runtime parameters

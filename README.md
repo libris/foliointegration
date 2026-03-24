@@ -69,6 +69,18 @@ The (comma-separated) list of SIGEL codes (library identification codes) to writ
 many libraries. This parameters tells the application what parts of the data in libris to write to this particular FOLIO instance
 
 `
+INITIAL_LIBRIS_SYNC_TIME
+`
+This parameter is optional and can be omitted. It tells the system the time from which it should consider itself up
+to date with libris, once the initial load has completed. If this option is omitted, the generation time of the initial
+EMM dump will be used as a default. When FOLIO is initially loaded in production, you will want this time set to the last
+write time of an item in Aleph, so that we don't create any double items but also don't miss creating any new ones.
+If FOLIO is reloaded from scratch in the future, or the integration is reset for whatever reason, you will want this set
+to whatever time the old integration was stopped at, so that we can keep going from the same point in time after the reset.
+This should be set to a time-with-timezone string, for example like so:
+`INITIAL_LIBRIS_SYNC_TIME="2020-01-01T00:00:00Z"`
+
+`
 FOLIO_WRITE_BATCH_SIZE
 `
 This application can, if there is a need, throttle the writes it does to FOLIO. This parameter specifies how many records
@@ -94,6 +106,12 @@ This parameter tells the application where to look for the JSLT file that conver
 happens on every update-increment (so think of it as happening on a second basis).
 
 `
+HOLDING_JSLT_URL
+`
+This works the same way as the parameter above, but instead specifies where to look for the JSLT file that converts Libris
+holdings-records into FOLIO holdings.
+
+`
 ITEM_JSLT_URL
 `
 This works the same way as the parameter above, but instead specifies where to look for the JSLT file that converts Libris
@@ -104,4 +122,4 @@ holdings-records into FOLIO items.
 
 To run locally (for development), assuming a locally running EMM server and XL REST API:
 
-`EMM_BASE_URL="http://localhost:8186/" FOLIO_USER="..." FOLIO_PASS="..." OKAPI_URL="https://okapi-folio-snapshot.okd-test.kb.se" OKAPI_TENANT="kbtest1" SIGEL="X,S" FOLIO_WRITE_BATCH_SIZE="20" FOLIO_WRITE_BATCHES_PER_CELL="50" FOLIO_WRITE_CELL_SECONDS="1" INSTANCE_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt" ITEM_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt" java -DDBPATH=/tmp/libris.sqlite3 -jar build/libs/foliolibrisintegration.jar`
+`EMM_BASE_URL="http://localhost:8186/" FOLIO_USER="..." FOLIO_PASS="..." OKAPI_URL="https://okapi-folio-snapshot.okd-test.kb.se" OKAPI_TENANT="kbtest1" SIGEL="X,S" FOLIO_WRITE_BATCH_SIZE="20" FOLIO_WRITE_BATCHES_PER_CELL="50" FOLIO_WRITE_CELL_SECONDS="1" INSTANCE_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt" HOLDING_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/holding.jslt" ITEM_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt" java -DDBPATH=/tmp/libris.sqlite3 -jar build/libs/foliolibrisintegration.jar`

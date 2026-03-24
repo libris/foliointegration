@@ -157,16 +157,25 @@ public class EmmDumpImport {
             Connection connection = Storage.getConnection();
 
             // Set initial time for sync catch-up
-            ZonedDateTime dumpCreationTime = ZonedDateTime.parse( Storage.getState(DUMP_ID_KEY, connection) );
-            long candidateUntil = dumpCreationTime.toInstant().toEpochMilli();
-            long preExistingUntil = 33305941930000L; // assumption, *far* future. (Instant.MAX overflows unfortunately)
-            String preExistingUntilString = Storage.getState(EmmSync.SYNCED_UNTIL_KEY, connection);
-            if (preExistingUntilString != null) {
-                preExistingUntil = Long.parseLong(preExistingUntilString);
-            }
-            if (candidateUntil < preExistingUntil) {
-                Storage.writeState(EmmSync.SYNCED_UNTIL_KEY, ""+candidateUntil, connection);
-                Storage.log("EMM Sync-from time is now set to: " + candidateUntil + " (" + dumpCreationTime + ")");
+            String forcedSyncTime = System.getenv("INITIAL_LIBRIS_SYNC_TIME");
+            if (forcedSyncTime != null) {
+                // A forced time set through parameters ?
+                long forcedMillis = ZonedDateTime.parse(forcedSyncTime).toInstant().toEpochMilli();
+                Storage.writeState(EmmSync.SYNCED_UNTIL_KEY, "" + forcedMillis, connection);
+                Storage.log("EMM Sync-from time is now set to: " + forcedMillis + " (" + forcedSyncTime + "). This was FORCED through the use of the INITIAL_LIBRIS_SYNC_TIME parameter.");
+            } else {
+                // Default, use the dump generation date(s).
+                ZonedDateTime dumpCreationTime = ZonedDateTime.parse(Storage.getState(DUMP_ID_KEY, connection));
+                long candidateUntil = dumpCreationTime.toInstant().toEpochMilli();
+                long preExistingUntil = 33305941930000L; // assumption, *far* future. (Instant.MAX overflows unfortunately)
+                String preExistingUntilString = Storage.getState(EmmSync.SYNCED_UNTIL_KEY, connection);
+                if (preExistingUntilString != null) {
+                    preExistingUntil = Long.parseLong(preExistingUntilString);
+                }
+                if (candidateUntil < preExistingUntil) {
+                    Storage.writeState(EmmSync.SYNCED_UNTIL_KEY, "" + candidateUntil, connection);
+                    Storage.log("EMM Sync-from time is now set to: " + candidateUntil + " (" + dumpCreationTime + ")");
+                }
             }
 
             Storage.clearState(OFFSET_KEY, connection);

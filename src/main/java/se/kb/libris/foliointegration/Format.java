@@ -41,6 +41,8 @@ public class Format {
     static Map<String, String> subjectSourceToGuid = new HashMap<>();
     static Map<String, String> classificationTypeToGuid = new HashMap<>();
     static Map<String, String> electronicAccessRelationshipToGuid = new HashMap<>();
+    static Map<String, String> modeOfIssuanceToGuid = new HashMap<>();
+    static Map<String, String> contributorNameTypeToGuid = new HashMap<>();
 
     static String instanceJsltConversion = null;
     static String holdingJsltConversion = null;
@@ -128,7 +130,21 @@ public class Format {
                 electronicAccessRelationshipToGuid.put((String)electronicAccessRelationship.get("name"), (String)electronicAccessRelationship.get("id"));
             }
 
-            //Storage.log("** THIS: " + electronicAccessRelationshipToGuid);
+            String modesOfIssuanceResponse = FolioWriting.getFromFolio("modes-of-issuance?query=cql.allRecords=1%20sortby%20name&limit=5000");
+            Map modesOfIssuanceMap = Storage.mapper.readValue(modesOfIssuanceResponse, Map.class);
+            List<Map> modesOfIssuance = (List<Map>) modesOfIssuanceMap.get("issuanceModes");
+            for (Map modeOfIssuance : modesOfIssuance) {
+                modeOfIssuanceToGuid.put((String)modeOfIssuance.get("name"), (String)modeOfIssuance.get("id"));
+            }
+
+            String contributorNameTypesResponse = FolioWriting.getFromFolio("contributor-name-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
+            Map contributorNameTypesMap = Storage.mapper.readValue(contributorNameTypesResponse, Map.class);
+            List<Map> contributorNameTypes = (List<Map>) contributorNameTypesMap.get("contributorNameTypes");
+            for (Map contributorNameType : contributorNameTypes) {
+                contributorNameTypeToGuid.put((String)contributorNameType.get("name"), (String)contributorNameType.get("id"));
+            }
+
+            //Storage.log("** THIS: " + contributorNameTypeToGuid);
 
         } catch (IOException ioe) {
             Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.", ioe);
@@ -264,6 +280,8 @@ public class Format {
         jsltFolioLookup(node, "__FOLIO_LOOKUP_SUBJECT_SOURCE_GUID", subjectSourceToGuid);
         jsltFolioLookup(node, "__FOLIO_LOOKUP_CLASSIFICATION_TYPE_GUID", classificationTypeToGuid);
         jsltFolioLookup(node, "__FOLIO_LOOKUP_ELECTRONIC_ACCESS_RELATIONSHIP_GUID", electronicAccessRelationshipToGuid);
+        jsltFolioLookup(node, "__FOLIO_LOOKUP_MODE_OF_ISSUANCE_GUID", modeOfIssuanceToGuid);
+        jsltFolioLookup(node, "__FOLIO_LOOKUP_CONTRIBUTOR_NAME_TYPE_GUID", contributorNameTypeToGuid);
     }
 
     private static String jsltFolioLookup(Object node, String JSLTKey, Map<String, String> lookupMap) {

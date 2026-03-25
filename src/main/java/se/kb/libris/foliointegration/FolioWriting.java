@@ -207,7 +207,8 @@ public class FolioWriting {
 
         folioRecord.put("processing",
                         Map.of("item",
-                                Map.of("retainOmittedRecord", new HashMap())
+                                Map.of("retainOmittedRecord",
+                                        Map.of("ifField", "hrid", "matchesPattern", ".*"))
                         ));
 
         //Storage.log(" LIKE THIS: " + Storage.mapper.writeValueAsString(folioRecord) + "\n\n");

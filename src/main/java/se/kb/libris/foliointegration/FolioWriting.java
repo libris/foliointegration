@@ -204,14 +204,12 @@ public class FolioWriting {
         // Make a copy, as we will be making some slight changes in there
         HashMap folioRecord = new HashMap(_folioRecord);
 
-
+        // We want to send holding records, without items, but without deleting existing items.
         folioRecord.put("processing",
                         Map.of("item",
                                 Map.of("retainOmittedRecord",
                                         Map.of("ifField", "hrid", "matchesPattern", ".*"))
                         ));
-
-        //Storage.log(" LIKE THIS: " + Storage.mapper.writeValueAsString(folioRecord) + "\n\n");
 
         batch.add(folioRecord);
 
@@ -246,7 +244,7 @@ public class FolioWriting {
     from here, and then clear all of the associated holdingIDs from 'holding_creations', so that we only create these
     items exactly once.
      */
-    private static HashMap<String, ArrayList<String>> clearExamplesUnlessAllowed(List<Map> instancesToBeWritten, Connection connection) throws SQLException {
+    private static HashMap<String, ArrayList<String>> clearItemsUnlessAllowed(List<Map> instancesToBeWritten, Connection connection) throws SQLException {
         var instanceHRIDsToHoldingsHRIDsWithItems = new HashMap<String, ArrayList<String>>();
         for (Map folioInstance : instancesToBeWritten) {
 
@@ -292,11 +290,10 @@ public class FolioWriting {
         if (batch.isEmpty())
             return;
 
-        HashMap<String, ArrayList<String>> instanceHRIDsToHoldingsHRIDsWithItems = clearExamplesUnlessAllowed(batch, connection);
+        HashMap<String, ArrayList<String>> instanceHRIDsToHoldingsHRIDsWithItems = clearItemsUnlessAllowed(batch, connection);
 
         //Storage.log("BATCH FIRST:  " + Storage.mapper.writeValueAsString( batch.getFirst() ) );
         // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
-
         /*if (1 == 1) {
             List<String> writtenIDs = new ArrayList<>();
             for (Map record : batch) {

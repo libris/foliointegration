@@ -184,7 +184,7 @@ public class FolioSync {
             return l * depth * offsetFactor;
         else if (node instanceof Map m) {
             for (Object key : m.keySet()) {
-                if (!key.equals("modified")) { // FILTER OTHER IRRELEVANT "BUILDE" PROPERTIES HERE
+                if (!key.equals("modified")) { // FILTER OTHER IRRELEVANT PROPERTIES HERE
 
                     term += key.hashCode() * depth;
                     term += calculateCheckSumInternal(m.get(key), depth + 1, key.hashCode());

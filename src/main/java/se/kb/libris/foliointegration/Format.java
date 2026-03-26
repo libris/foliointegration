@@ -155,7 +155,7 @@ public class Format {
             populateStandardLookup(
                     "item-note-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "itemNoteTypes",
-                    "__FOLIO_ITEM_NOTE_TYPES",
+                    "__FOLIO_LOOKUP_ITEM_NOTE_TYPES",
                     false
             );
 

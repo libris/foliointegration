@@ -124,6 +124,41 @@ public class Format {
                     false
             );
 
+            populateStandardLookup(
+                    "statistical-codes?query=cql.allRecords=1%20sortby%20code&limit=5000",
+                    "statisticalCodes",
+                    "__FOLIO_LOOKUP_STATISTICAL_CODES",
+                    false
+            );
+
+            populateStandardLookup(
+                    "call-number-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "callNumberTypes",
+                    "__FOLIO_LOOKUP_CALL_NUMBER_TYPES",
+                    false
+            );
+
+            populateStandardLookup(
+                    "loan-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "loantypes",
+                    "__FOLIO_LOOKUP_LOAN_TYPES",
+                    false
+            );
+
+            populateStandardLookup(
+                    "material-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "mtypes",
+                    "__FOLIO_LOOKUP_MATERIAL_TYPES",
+                    false
+            );
+
+            populateStandardLookup(
+                    "item-note-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "itemNoteTypes",
+                    "__FOLIO_ITEM_NOTE_TYPES",
+                    false
+            );
+
         } catch (IOException ioe) {
             Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.", ioe);
             System.exit(1);
@@ -139,6 +174,11 @@ public class Format {
 
         Map<String, String> nameToGuidResult = new HashMap<>();
         String response = FolioWriting.getFromFolio(query);
+
+        if (verbose) {
+            Storage.log("Created a lookup out of:\n" + response);
+        }
+
         Map responseMap = Storage.mapper.readValue(response, Map.class);
         List<Map> elements = (List<Map>) responseMap.get(listName);
         for (Map element : elements) {
@@ -147,7 +187,7 @@ public class Format {
 
         lookupFunctions.add( o -> jsltFolioLookup(o, lookupCode, nameToGuidResult) );
         if (verbose) {
-            Storage.log("Created a lookup out of:\n" + response + "\ninto:\n" + nameToGuidResult);
+            Storage.log("into:\n" + nameToGuidResult);
         }
     }
 

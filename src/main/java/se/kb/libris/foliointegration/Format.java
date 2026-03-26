@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -30,121 +31,98 @@ import org.apache.hc.core5.util.Timeout;
 
 public class Format {
 
-    // Initial lookup of FOLIO GUIDs for various things, done at startup.
-    static Map<String, String> locationToGuid = new HashMap<>();
-    static Map<String, String> instanceTypeToGuid = new HashMap<>();
-    static Map<String, String> instanceNoteTypeToGuid = new HashMap<>();
-    static Map<String, String> altTitleTypeToGuid = new HashMap<>();
-    static Map<String, String> identifierTypeToGuid = new HashMap<>();
-    static Map<String, String> instanceFormatToGuid = new HashMap<>();
-    static Map<String, String> subjectTypeToGuid = new HashMap<>();
-    static Map<String, String> subjectSourceToGuid = new HashMap<>();
-    static Map<String, String> classificationTypeToGuid = new HashMap<>();
-    static Map<String, String> electronicAccessRelationshipToGuid = new HashMap<>();
-    static Map<String, String> modeOfIssuanceToGuid = new HashMap<>();
-    static Map<String, String> contributorNameTypeToGuid = new HashMap<>();
-
     static String instanceJsltConversion = null;
     static String holdingJsltConversion = null;
     static String itemJsltConversion = null;
     static Instant lastJsltUpdate = Instant.ofEpochMilli(0);
+
+    private static List<Consumer<Object>> lookupFunctions = new ArrayList<>();
     static {
         try {
 
-            // locations
-            String locations = FolioWriting.getFromFolio("/locations?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map locationsMap = Storage.mapper.readValue(locations, Map.class);
-            List<Map> locationEntities = (List<Map>) locationsMap.get("locations");
-            for (Map locationEntity : locationEntities) {
-                locationToGuid.put((String)locationEntity.get("name"), (String)locationEntity.get("id")); // use code as key instead ?
-            }
+            populateStandardLookup(
+                    "locations?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "locations",
+                    "__FOLIO_LOOKUP_LOCATION_GUID",
+                    false
+            );
 
-            // resource types
-            String resourceTypesResponse = FolioWriting.getFromFolio("/instance-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map instanceTypesMap = Storage.mapper.readValue(resourceTypesResponse, Map.class);
-            List<Map> instanceTypes = (List<Map>) instanceTypesMap.get("instanceTypes");
-            for (Map instanceType : instanceTypes) {
-                instanceTypeToGuid.put((String)instanceType.get("name"), (String)instanceType.get("id"));
-            }
+            populateStandardLookup(
+                    "instance-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "instanceTypes",
+                    "__FOLIO_LOOKUP_TYPE_GUID",
+                    false
+            );
 
-            // instance note types
-            String instanceNotesResponse = FolioWriting.getFromFolio("instance-note-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map instanceNoteTypesMap = Storage.mapper.readValue(instanceNotesResponse, Map.class);
-            List<Map> instanceNoteTypes = (List<Map>) instanceNoteTypesMap.get("instanceNoteTypes");
-            for (Map instanceNoteType : instanceNoteTypes) {
-                instanceNoteTypeToGuid.put((String)instanceNoteType.get("name"), (String)instanceNoteType.get("id"));
-            }
+            populateStandardLookup(
+                    "instance-note-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "instanceNoteTypes",
+                    "__FOLIO_LOOKUP_NOTE_TYPE_GUID",
+                    false
+            );
 
-            // alternative title types
-            String altTypesResponse = FolioWriting.getFromFolio("alternative-title-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map altTitleTypesMap = Storage.mapper.readValue(altTypesResponse, Map.class);
-            List<Map> altTitleTypes = (List<Map>) altTitleTypesMap.get("alternativeTitleTypes");
-            for (Map altTitleType : altTitleTypes) {
-                altTitleTypeToGuid.put((String)altTitleType.get("name"), (String)altTitleType.get("id"));
-            }
+            populateStandardLookup(
+                    "alternative-title-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "alternativeTitleTypes",
+                    "__FOLIO_LOOKUP_ALTTITLETYPE_GUID",
+                    false
+            );
 
-            // identifier types
-            String IdentifierTypesResponse = FolioWriting.getFromFolio("identifier-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map identifierTypesMap = Storage.mapper.readValue(IdentifierTypesResponse, Map.class);
-            List<Map> identifierTypes = (List<Map>) identifierTypesMap.get("identifierTypes");
-            for (Map identifierType : identifierTypes) {
-                identifierTypeToGuid.put((String)identifierType.get("name"), (String)identifierType.get("id"));
-            }
+            populateStandardLookup(
+                    "identifier-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "identifierTypes",
+                    "__FOLIO_LOOKUP_IDENTIFIER_TYPE_GUID",
+                    false
+            );
 
-            // instance formats
-            String instanceFormatesResponse = FolioWriting.getFromFolio("instance-formats?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map instanceFormatsMap = Storage.mapper.readValue(instanceFormatesResponse, Map.class);
-            List<Map> instanceFormats = (List<Map>) instanceFormatsMap.get("instanceFormats");
-            for (Map instanceFormat : instanceFormats) {
-                instanceFormatToGuid.put((String)instanceFormat.get("name"), (String)instanceFormat.get("id"));
-            }
+            populateStandardLookup(
+                    "instance-formats?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "instanceFormats",
+                    "__FOLIO_LOOKUP_INSTANCE_FORMAT_GUID",
+                    false
+            );
 
-            // subject type
-            String subjectTypesResponse = FolioWriting.getFromFolio("subject-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map subjectTypesMap = Storage.mapper.readValue(subjectTypesResponse, Map.class);
-            List<Map> subjectTypes = (List<Map>) subjectTypesMap.get("subjectTypes");
-            for (Map subjectType : subjectTypes) {
-                subjectTypeToGuid.put((String)subjectType.get("name"), (String)subjectType.get("id"));
-            }
+            populateStandardLookup(
+                    "subject-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "subjectTypes",
+                    "__FOLIO_LOOKUP_SUBJECT_TYPE_GUID",
+                    false
+            );
 
-            // subject source
-            String subjectSourcesResponse = FolioWriting.getFromFolio("subject-sources?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map subjectSourcesMap = Storage.mapper.readValue(subjectSourcesResponse, Map.class);
-            List<Map> subjectSources = (List<Map>) subjectSourcesMap.get("subjectSources");
-            for (Map subjectSource : subjectSources) {
-                subjectSourceToGuid.put((String)subjectSource.get("name"), (String)subjectSource.get("id"));
-            }
+            populateStandardLookup(
+                    "subject-sources?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "subjectSources",
+                    "__FOLIO_LOOKUP_SUBJECT_SOURCE_GUID",
+                    false
+            );
 
-            // classification types
-            String classificationTypesResponse = FolioWriting.getFromFolio("classification-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map classificationTypesMap = Storage.mapper.readValue(classificationTypesResponse, Map.class);
-            List<Map> classificationTypes = (List<Map>) classificationTypesMap.get("classificationTypes");
-            for (Map classificationType : classificationTypes) {
-                classificationTypeToGuid.put((String)classificationType.get("name"), (String)classificationType.get("id"));
-            }
+            populateStandardLookup(
+                    "classification-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "classificationTypes",
+                    "__FOLIO_LOOKUP_CLASSIFICATION_TYPE_GUID",
+                    false
+            );
 
-            String electronicAccessRelationshipsResponse = FolioWriting.getFromFolio("electronic-access-relationships?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map electronicAccessRelationshipsMap = Storage.mapper.readValue(electronicAccessRelationshipsResponse, Map.class);
-            List<Map> electronicAccessRelationships = (List<Map>) electronicAccessRelationshipsMap.get("electronicAccessRelationships");
-            for (Map electronicAccessRelationship : electronicAccessRelationships) {
-                electronicAccessRelationshipToGuid.put((String)electronicAccessRelationship.get("name"), (String)electronicAccessRelationship.get("id"));
-            }
+            populateStandardLookup(
+                    "electronic-access-relationships?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "electronicAccessRelationships",
+                    "__FOLIO_LOOKUP_ELECTRONIC_ACCESS_RELATIONSHIP_GUID",
+                    false
+            );
 
-            String modesOfIssuanceResponse = FolioWriting.getFromFolio("modes-of-issuance?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map modesOfIssuanceMap = Storage.mapper.readValue(modesOfIssuanceResponse, Map.class);
-            List<Map> modesOfIssuance = (List<Map>) modesOfIssuanceMap.get("issuanceModes");
-            for (Map modeOfIssuance : modesOfIssuance) {
-                modeOfIssuanceToGuid.put((String)modeOfIssuance.get("name"), (String)modeOfIssuance.get("id"));
-            }
+            populateStandardLookup(
+                    "modes-of-issuance?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "issuanceModes",
+                    "__FOLIO_LOOKUP_MODE_OF_ISSUANCE_GUID",
+                    false
+            );
 
-            String contributorNameTypesResponse = FolioWriting.getFromFolio("contributor-name-types?query=cql.allRecords=1%20sortby%20name&limit=5000");
-            Map contributorNameTypesMap = Storage.mapper.readValue(contributorNameTypesResponse, Map.class);
-            List<Map> contributorNameTypes = (List<Map>) contributorNameTypesMap.get("contributorNameTypes");
-            for (Map contributorNameType : contributorNameTypes) {
-                contributorNameTypeToGuid.put((String)contributorNameType.get("name"), (String)contributorNameType.get("id"));
-            }
-
-            //Storage.log("** THIS: " + contributorNameTypeToGuid);
+            populateStandardLookup(
+                    "contributor-name-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "contributorNameTypes",
+                    "__FOLIO_LOOKUP_CONTRIBUTOR_NAME_TYPE_GUID",
+                    false
+            );
 
         } catch (IOException ioe) {
             Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.", ioe);
@@ -154,6 +132,28 @@ public class Format {
         if (!lookupJsltConversions()) {
             Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.");
             System.exit(1);
+        }
+    }
+
+    private static void populateStandardLookup(String query, String listName, String lookupCode, boolean verbose) throws IOException {
+
+        Map<String, String> nameToGuidResult = new HashMap<>();
+        String response = FolioWriting.getFromFolio(query);
+        Map responseMap = Storage.mapper.readValue(response, Map.class);
+        List<Map> elements = (List<Map>) responseMap.get(listName);
+        for (Map element : elements) {
+            nameToGuidResult.put((String)element.get("name"), (String)element.get("id"));
+        }
+
+        lookupFunctions.add( o -> jsltFolioLookup(o, lookupCode, nameToGuidResult) );
+        if (verbose) {
+            Storage.log("Created a lookup out of:\n" + response + "\ninto:\n" + nameToGuidResult);
+        }
+    }
+
+    private static void jsltFolioLookups(Object node) {
+        for (var c : lookupFunctions) {
+            c.accept(node);
         }
     }
 
@@ -267,21 +267,6 @@ public class Format {
             }
         }
         return items;
-    }
-
-    private static void jsltFolioLookups(Object node) {
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_TYPE_GUID", instanceTypeToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_NOTE_TYPE_GUID", instanceNoteTypeToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_LOCATION_GUID", locationToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_ALTTITLETYPE_GUID", altTitleTypeToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_IDENTIFIER_TYPE_GUID", identifierTypeToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_INSTANCE_FORMAT_GUID", instanceFormatToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_SUBJECT_TYPE_GUID", subjectTypeToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_SUBJECT_SOURCE_GUID", subjectSourceToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_CLASSIFICATION_TYPE_GUID", classificationTypeToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_ELECTRONIC_ACCESS_RELATIONSHIP_GUID", electronicAccessRelationshipToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_MODE_OF_ISSUANCE_GUID", modeOfIssuanceToGuid);
-        jsltFolioLookup(node, "__FOLIO_LOOKUP_CONTRIBUTOR_NAME_TYPE_GUID", contributorNameTypeToGuid);
     }
 
     private static String jsltFolioLookup(Object node, String JSLTKey, Map<String, String> lookupMap) {

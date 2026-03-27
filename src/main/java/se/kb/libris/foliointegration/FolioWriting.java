@@ -310,7 +310,6 @@ public class FolioWriting {
 
 
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
-
             // Throttle if necessary
             while (true) {
                 Instant now = Instant.now();

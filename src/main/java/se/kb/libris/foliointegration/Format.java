@@ -50,14 +50,14 @@ public class Format {
             populateStandardLookup(
                     "instance-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "instanceTypes",
-                    "__FOLIO_LOOKUP_TYPE_GUID",
+                    "__FOLIO_LOOKUP_INSTANCE_TYPE_GUID",
                     false
             );
 
             populateStandardLookup(
                     "instance-note-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "instanceNoteTypes",
-                    "__FOLIO_LOOKUP_NOTE_TYPE_GUID",
+                    "__FOLIO_LOOKUP_INSTANCE_NOTE_TYPE_GUID",
                     false
             );
 
@@ -127,35 +127,35 @@ public class Format {
             populateStandardLookup(
                     "statistical-codes?query=cql.allRecords=1%20sortby%20code&limit=5000",
                     "statisticalCodes",
-                    "__FOLIO_LOOKUP_STATISTICAL_CODES",
+                    "__FOLIO_LOOKUP_STATISTICAL_CODES_GUID",
                     false
             );
 
             populateStandardLookup(
                     "call-number-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "callNumberTypes",
-                    "__FOLIO_LOOKUP_CALL_NUMBER_TYPES",
+                    "__FOLIO_LOOKUP_CALL_NUMBER_TYPES_GUID",
                     false
             );
 
             populateStandardLookup(
                     "loan-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "loantypes",
-                    "__FOLIO_LOOKUP_LOAN_TYPES",
+                    "__FOLIO_LOOKUP_LOAN_TYPES_GUID",
                     false
             );
 
             populateStandardLookup(
                     "material-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "mtypes",
-                    "__FOLIO_LOOKUP_MATERIAL_TYPES",
+                    "__FOLIO_LOOKUP_MATERIAL_TYPES_GUID",
                     false
             );
 
             populateStandardLookup(
                     "item-note-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "itemNoteTypes",
-                    "__FOLIO_LOOKUP_ITEM_NOTE_TYPES",
+                    "__FOLIO_LOOKUP_ITEM_NOTE_TYPES_GUID",
                     false
             );
 

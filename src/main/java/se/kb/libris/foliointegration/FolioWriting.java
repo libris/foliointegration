@@ -18,8 +18,6 @@ import org.apache.hc.core5.util.Timeout;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -39,7 +37,6 @@ public class FolioWriting {
     private static final long folioCellSeconds;
 
     private static List<Map> batch = new ArrayList<>();
-    private static List<Thread> hridLookupThreads = new ArrayList<>();
 
     private static long folioTokenValidUntil = 0;
     private static String folioToken = null;
@@ -157,49 +154,6 @@ public class FolioWriting {
         throw new IOException("Unable to complete request: " + pathAndParameters);
     }
 
-    private static void lookupFolioHRID(Map folioRecord) {
-
-        // Have to retry forever, because the alternative (to not getting a definitive answer)
-        // is creating a double record.
-        while (true) {
-
-            try {
-                Map instanceToBeSent = (Map) folioRecord.get("instance");
-                String mainEntityUri = (String) instanceToBeSent.get("sourceUri");
-                String pathAndParameters = "/inventory/instances?query=sourceUri==" + URLEncoder.encode("\"" + mainEntityUri + "\"", StandardCharsets.UTF_8);
-                String response = getFromFolio(pathAndParameters);
-
-                if (response == null)
-                    continue;
-
-                Map responseMap = Storage.mapper.readValue(response, Map.class);
-                if (responseMap.containsKey("instances")) {
-                    List instances = (List) responseMap.get("instances");
-                    if (!instances.isEmpty()) {
-                        Map instanceFromFolio = (Map) instances.get(0); // There should never be more than one instance having this specific ID
-                        if (instanceFromFolio.containsKey("hrid")) {
-                            //Storage.log("Replaced outgoing HRID: " + instanceFromFolio.get("hrid"));
-                            instanceToBeSent.put("hrid", instanceFromFolio.get("hrid"));
-                            return;
-                        }
-                    } else {
-                        // NO HRID OBATINED FROM FOLIO, LEAVE THE CONTROLNUMBER AS IS!
-                        Storage.log("Minting a new folio ID: " + instanceToBeSent.get("hrid"));
-                        return;
-                    }
-                }
-            } catch (IOException ioe) {
-                Storage.log("Failed HRID lookup, will retry later.", ioe);
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e2) {
-                    // ignore
-                }
-            }
-            System.err.println("Retrying HRID...");
-        }
-    }
-
     public static synchronized void queueForExport(Map _folioRecord, Connection connection) throws IOException, InterruptedException, SQLException {
         // Make a copy, as we will be making some slight changes in there
         HashMap folioRecord = new HashMap(_folioRecord);
@@ -212,10 +166,6 @@ public class FolioWriting {
                         ));
 
         batch.add(folioRecord);
-
-        // We no longer need to do this, since redefining folio HRIDS as Libris control numbers.
-        //Thread t = Thread.startVirtualThread(() -> lookupFolioHRID(folioRecord));
-        //hridLookupThreads.add(t);
 
         if (batch.size() >= folioWriteBatchSize) { // Too large batches results in internal http 414 in folio.
             flushQueue(connection);
@@ -244,16 +194,16 @@ public class FolioWriting {
     from here, and then clear all of the associated holdingIDs from 'holding_creations', so that we only create these
     items exactly once.
      */
-    private static HashMap<String, ArrayList<String>> clearItemsUnlessAllowed(List<Map> instancesToBeWritten, Connection connection) throws SQLException {
+    private static HashMap<String, ArrayList<String>> clearItemsUnlessAllowed(List<Map> recordsToBeWritten, Connection connection) throws SQLException {
         var instanceHRIDsToHoldingsHRIDsWithItems = new HashMap<String, ArrayList<String>>();
-        for (Map folioInstance : instancesToBeWritten) {
+        for (Map recordToBeWritten : recordsToBeWritten) {
 
             ArrayList<String> holdingHRIDsWithItems = new ArrayList<>();
-            String instanceHRID = (String) ((Map)folioInstance.get("instance")).get("hrid");
+            String instanceHRID = (String) ((Map)recordToBeWritten.get("instance")).get("hrid");
             instanceHRIDsToHoldingsHRIDsWithItems.put(instanceHRID, holdingHRIDsWithItems);
 
-            if (folioInstance.containsKey("holdingsRecords")) {
-                for (Map folioHolding : (List<Map>) folioInstance.get("holdingsRecords")) {
+            if (recordToBeWritten.containsKey("holdingsRecords")) {
+                for (Map folioHolding : (List<Map>) recordToBeWritten.get("holdingsRecords")) {
 
                     boolean shouldCreateItems = false;
                     try (PreparedStatement statement = connection.prepareStatement("SELECT hrid FROM holding_creations WHERE hrid = ?")) {
@@ -279,14 +229,65 @@ public class FolioWriting {
         return instanceHRIDsToHoldingsHRIDsWithItems;
     }
 
-    public static synchronized void flushQueue(Connection connection) throws IOException, InterruptedException, SQLException {
+    private static String getNextBarCode(CloseableHttpClient httpClient, String token) throws IOException, URISyntaxException, ParseException {
 
-        // All HRID lookups must have concluded before flushing is possible
-        for (Thread t : hridLookupThreads) {
-            t.join();
+        //  https://okapi-folio-snapshot.okd-kv.kb.se/servint/numberGenerators/getNextNumber?generator=inventory_itemBarcode&sequence=itemBarcode
+
+        URI uri = new URI(folioBaseUri);
+        uri = uri.resolve("/servint/numberGenerators/getNextNumber?generator=inventory_itemBarcode&sequence=itemBarcode");
+        HttpGet request = new HttpGet(uri);
+        RequestConfig config = RequestConfig.custom()
+                .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+        request.setConfig(config);
+
+        request.setHeader("X-Okapi-Tenant", folioTenant);
+        request.setHeader("Accept", "application/json");
+        request.setHeader("Cookie", token);
+
+        ClassicHttpResponse response = httpClient.execute(request);
+        String responseText = EntityUtils.toString(response.getEntity());
+
+        // respone looks like so: {"generator":"inventory_itemBarcode","sequence":"itemBarcode","status":"OK","nextValue":"0000000003"}
+        Map responseMap = Storage.mapper.readValue(responseText, Map.class);
+        if (responseMap.get("status").equals("OK") && responseMap.get("nextValue") != null && responseMap.get("nextValue") instanceof String code) {
+            return code;
         }
-        hridLookupThreads.clear();
+        throw new RuntimeException("Failure getting next barcode from folio. Response was: " + responseText);
+    }
 
+    private static void insertBarCodes(CloseableHttpClient httpClient, String token, Object node) throws IOException, URISyntaxException, ParseException {
+        if (node instanceof Map m) {
+
+            Object keyToReplace = null;
+            for(Object key : m.keySet()) {
+                if (m.get(key).equals("__FOLIO_FETCH_BARCODE"))
+                    keyToReplace = key;
+            }
+            if (keyToReplace != null) {
+                m.put(keyToReplace, getNextBarCode(httpClient, token));
+                return;
+            }
+
+            // Move along
+            for(Object key : m.keySet()) {
+                insertBarCodes(httpClient, token, m.get(key));
+            }
+        } else if (node instanceof List l) {
+            for (int i = 0; i < l.size(); ++i) {
+                if (l.get(i) instanceof String s && s.equals("__FOLIO_FETCH_BARCODE")) {
+                    l.remove(i);
+                    l.add(i, getNextBarCode(httpClient, token));
+                }
+            }
+
+            // Move along
+            for (Object element : l) {
+                insertBarCodes(httpClient, token, element);
+            }
+        }
+    }
+
+    public static synchronized void flushQueue(Connection connection) throws IOException, InterruptedException, SQLException {
         if (batch.isEmpty())
             return;
 
@@ -304,10 +305,6 @@ public class FolioWriting {
             return;
         }*/
         // REMOVE THIS
-
-        Map recordSet = Map.of("inventoryRecordSets", batch);
-        String body = Storage.mapper.writeValueAsString(recordSet);
-
 
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
             // Throttle if necessary
@@ -330,6 +327,14 @@ public class FolioWriting {
             }
 
             String token = getToken();
+
+            // Fetch barcodes from FOLIO and insert them now (at the last possible instant).
+            insertBarCodes(httpClient, token, batch);
+
+            Map recordSet = Map.of("inventoryRecordSets", batch);
+            String body = Storage.mapper.writeValueAsString(recordSet);
+
+            //Storage.log(" SENDING: " + body);
 
             URI uri = new URI(folioBaseUri);
             uri = uri.resolve("/inventory-batch-upsert-hrid");

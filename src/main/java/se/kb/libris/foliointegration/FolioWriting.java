@@ -443,14 +443,25 @@ public class FolioWriting {
                 if (instanceHRIDsToHoldingsHRIDsWithItems.containsKey(writtenHrid)) {
                     List<String> holdingHRIDs = instanceHRIDsToHoldingsHRIDsWithItems.get(writtenHrid);
                     for (String holdingHRIDwithItemsWritten : holdingHRIDs) {
-                        sql = """
-                                DELETE FROM holding_creations WHERE hrid = ?;
-                                """;
-                        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                            statement.setString(1, holdingHRIDwithItemsWritten);
-                            statement.execute();
+
+                        // We know the ID of the instant we wrote, from this and the instanceHRIDsToHoldingsHRIDsWithItems we derive the holding HRIDs we wrote
+                        // and for each of those, consider it a success, only if there isnt also a listed failed HRID for an item associated with that holding.
+                        boolean writtenOk = true;
+                        for (String failedHrid : failedHridsInBatch) {
+                            if (failedHrid.startsWith(holdingHRIDwithItemsWritten))
+                                writtenOk = false;
                         }
-                        Storage.log("Cleared holding hrid: " + holdingHRIDwithItemsWritten + " from the item creation queue. Items for this holding have now been created and should never be created again.");
+
+                        if (writtenOk) {
+                            sql = """
+                                    DELETE FROM holding_creations WHERE hrid = ?;
+                                    """;
+                            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                                statement.setString(1, holdingHRIDwithItemsWritten);
+                                statement.execute();
+                            }
+                            Storage.log("Cleared holding hrid: " + holdingHRIDwithItemsWritten + " from the item creation queue. Items for this holding have now been created and should never be created again.");
+                        }
                     }
                 }
             }

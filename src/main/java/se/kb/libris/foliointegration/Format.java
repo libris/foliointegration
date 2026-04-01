@@ -44,6 +44,7 @@ public class Format {
                     "locations?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "locations",
                     "__FOLIO_LOOKUP_LOCATION_GUID",
+                    "name",
                     false
             );
 
@@ -51,6 +52,7 @@ public class Format {
                     "instance-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "instanceTypes",
                     "__FOLIO_LOOKUP_INSTANCE_TYPE_GUID",
+                    "name",
                     false
             );
 
@@ -58,6 +60,7 @@ public class Format {
                     "instance-note-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "instanceNoteTypes",
                     "__FOLIO_LOOKUP_INSTANCE_NOTE_TYPE_GUID",
+                    "name",
                     false
             );
 
@@ -65,6 +68,7 @@ public class Format {
                     "alternative-title-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "alternativeTitleTypes",
                     "__FOLIO_LOOKUP_ALTTITLETYPE_GUID",
+                    "name",
                     false
             );
 
@@ -72,6 +76,7 @@ public class Format {
                     "identifier-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "identifierTypes",
                     "__FOLIO_LOOKUP_IDENTIFIER_TYPE_GUID",
+                    "name",
                     false
             );
 
@@ -79,6 +84,7 @@ public class Format {
                     "instance-formats?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "instanceFormats",
                     "__FOLIO_LOOKUP_INSTANCE_FORMAT_GUID",
+                    "name",
                     false
             );
 
@@ -86,6 +92,7 @@ public class Format {
                     "subject-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "subjectTypes",
                     "__FOLIO_LOOKUP_SUBJECT_TYPE_GUID",
+                    "name",
                     false
             );
 
@@ -93,6 +100,7 @@ public class Format {
                     "subject-sources?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "subjectSources",
                     "__FOLIO_LOOKUP_SUBJECT_SOURCE_GUID",
+                    "name",
                     false
             );
 
@@ -100,6 +108,7 @@ public class Format {
                     "classification-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "classificationTypes",
                     "__FOLIO_LOOKUP_CLASSIFICATION_TYPE_GUID",
+                    "name",
                     false
             );
 
@@ -107,6 +116,7 @@ public class Format {
                     "electronic-access-relationships?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "electronicAccessRelationships",
                     "__FOLIO_LOOKUP_ELECTRONIC_ACCESS_RELATIONSHIP_GUID",
+                    "name",
                     false
             );
 
@@ -114,6 +124,7 @@ public class Format {
                     "modes-of-issuance?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "issuanceModes",
                     "__FOLIO_LOOKUP_MODE_OF_ISSUANCE_GUID",
+                    "name",
                     false
             );
 
@@ -121,6 +132,7 @@ public class Format {
                     "contributor-name-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "contributorNameTypes",
                     "__FOLIO_LOOKUP_CONTRIBUTOR_NAME_TYPE_GUID",
+                    "name",
                     false
             );
 
@@ -128,6 +140,7 @@ public class Format {
                     "statistical-codes?query=cql.allRecords=1%20sortby%20code&limit=5000",
                     "statisticalCodes",
                     "__FOLIO_LOOKUP_STATISTICAL_CODES_GUID",
+                    "code",
                     false
             );
 
@@ -135,6 +148,7 @@ public class Format {
                     "call-number-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "callNumberTypes",
                     "__FOLIO_LOOKUP_CALL_NUMBER_TYPES_GUID",
+                    "name",
                     false
             );
 
@@ -142,6 +156,7 @@ public class Format {
                     "loan-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "loantypes",
                     "__FOLIO_LOOKUP_LOAN_TYPES_GUID",
+                    "name",
                     false
             );
 
@@ -149,6 +164,7 @@ public class Format {
                     "material-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "mtypes",
                     "__FOLIO_LOOKUP_MATERIAL_TYPES_GUID",
+                    "name",
                     false
             );
 
@@ -156,6 +172,7 @@ public class Format {
                     "item-note-types?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "itemNoteTypes",
                     "__FOLIO_LOOKUP_ITEM_NOTE_TYPES_GUID",
+                    "name",
                     false
             );
 
@@ -170,7 +187,7 @@ public class Format {
         }
     }
 
-    private static void populateStandardLookup(String query, String listName, String lookupCode, boolean verbose) throws IOException {
+    private static void populateStandardLookup(String query, String listName, String lookupCode, String property, boolean verbose) throws IOException {
 
         Map<String, String> nameToGuidResult = new HashMap<>();
         String response = FolioWriting.getFromFolio(query);
@@ -182,7 +199,7 @@ public class Format {
         Map responseMap = Storage.mapper.readValue(response, Map.class);
         List<Map> elements = (List<Map>) responseMap.get(listName);
         for (Map element : elements) {
-            nameToGuidResult.put((String)element.get("name"), (String)element.get("id"));
+            nameToGuidResult.put((String)element.get(property), (String)element.get("id"));
         }
 
         lookupFunctions.add( o -> jsltFolioLookup(o, lookupCode, nameToGuidResult) );

@@ -270,7 +270,8 @@ public class FolioWriting {
 
             // Move along
             for(Object key : m.keySet()) {
-                insertBarCodes(httpClient, token, m.get(key));
+                if (m.get(key) != null)
+                    insertBarCodes(httpClient, token, m.get(key));
             }
         } else if (node instanceof List l) {
             for (int i = 0; i < l.size(); ++i) {
@@ -282,7 +283,8 @@ public class FolioWriting {
 
             // Move along
             for (Object element : l) {
-                insertBarCodes(httpClient, token, element);
+                if (element != null)
+                    insertBarCodes(httpClient, token, element);
             }
         }
     }

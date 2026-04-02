@@ -122,9 +122,19 @@ ITEM_JSLT_URL
 This works the same way as the parameter above, but instead specifies where to look for the JSLT file that converts Libris
 holdings-records into FOLIO items.
 
+`
+FOLIO_KAFKA_CLIENT_CERT
+`
+This is the PEM certificate string to send to FOLIO, essentially the "Kafka password".
+
+`
+FOLIO_KAFKA_SERVERS
+`
+This is the (optionally comma separated list of) Kafka "bootstrap" broker uris. Essentially the Kafka server host/port
+
 
 ## Development
 
 To run locally (for development), assuming a locally running EMM server and XL REST API:
 
-`EMM_BASE_URL="http://localhost:8186/" FOLIO_USER="..." FOLIO_PASS="..." OKAPI_URL="https://okapi-folio-snapshot.okd-test.kb.se" OKAPI_TENANT="kbtest1" SIGEL="X,S" FOLIO_WRITE_BATCH_SIZE="20" FOLIO_WRITE_BATCHES_PER_CELL="50" FOLIO_WRITE_CELL_SECONDS="1" INSTANCE_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt" HOLDING_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/holding.jslt" ITEM_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt" java -DDBPATH=/tmp/libris.sqlite3 -jar build/libs/foliolibrisintegration.jar`
+`FOLIO_KAFKA_SERVERS="folio-inttest-kafka-bootstrap.apps.fusionhg.kb.local:443" FOLIO_KAFKA_CLIENT_CERT="-----BEGIN CERTIFICATE-----...." EMM_BASE_URL="http://localhost:8186/" FOLIO_USER="..." FOLIO_PASS="..." OKAPI_URL="https://okapi-folio-snapshot.okd-test.kb.se" OKAPI_TENANT="kbtest1" SIGEL="X,S" FOLIO_WRITE_BATCH_SIZE="20" FOLIO_WRITE_BATCHES_PER_CELL="50" FOLIO_WRITE_CELL_SECONDS="1" INSTANCE_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt" HOLDING_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/holding.jslt" ITEM_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt" java -DDBPATH=/tmp/libris.sqlite3 -jar build/libs/foliolibrisintegration.jar`

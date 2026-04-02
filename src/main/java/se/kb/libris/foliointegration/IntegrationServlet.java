@@ -240,7 +240,7 @@ public class IntegrationServlet extends HttpServlet {
 
                 s = """
                         <form action="/emmtime" method="post">
-                            <label for="emmtime">Reset sync FROM LIBRIS to [everything that changed since] (swedish local time):</label>
+                            <label for="emmtime">Reset sync FROM LIBRIS to [everything that changed since] (swedish local time) NOTE: THIS CAN CAUSE THE RECREATION OF ITEMS!:</label>
                             <input id="emmtime" name="emmtime" type="datetime-local">
                             <input type="submit" value="Set time">
                         </form>

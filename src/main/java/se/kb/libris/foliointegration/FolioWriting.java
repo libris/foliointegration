@@ -218,7 +218,7 @@ public class FolioWriting {
                     if (!shouldCreateItems) {
                         folioHolding.remove("items");
                         //Storage.log("Filtering items of " + folioHolding.get("hrid") + " because no found creation-event.");
-                    } else {
+                    } else if (folioHolding.get("items") != null) {
                         Storage.log("Allowing the creation of " + ( (List) folioHolding.get("items") ).size() + " items for " + folioHolding.get("hrid"));
                         String holdingHRID = (String) folioHolding.get("hrid");
                         holdingHRIDsWithItems.add(holdingHRID);

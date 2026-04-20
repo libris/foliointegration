@@ -65,8 +65,19 @@ public class LibrisWriteBack {
             Map item = (Map) eventMap.get("new");
             String holdingId = (String) item.get("holdingsRecordId");
             String holdingString = FolioWriting.getFromFolio("/holdings-storage/holdings/" + holdingId);
-            Storage.log(" **** fetched holding: " + holdingString);
+            //Storage.log(" **** fetched holding: " + holdingString);
+
+
             Map holdingMap = Storage.mapper.readValue(holdingString, Map.class);
+
+            String itemsString = FolioWriting.getFromFolio("/inventory/items-by-holdings-id?offset=0&limit=2000&query=holdingsRecordId=" + holdingId);
+            //Storage.log(" **** fetched items for holding: " + holdingId + ":\n" + itemsString);
+
+            Map itemsMap = Storage.mapper.readValue(itemsString, Map.class);
+            holdingMap.put("items", itemsMap.get("items"));
+
+            Storage.log(" **** ready for transfrom for: " + holdingId + ":\n" + Storage.mapper.writeValueAsString(holdingMap));
+
         } catch (Exception e) {
             Storage.log("Failed handling KAFKA event. The value received from KAFKA was this:\n" + event, e);
         }

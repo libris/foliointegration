@@ -36,6 +36,8 @@ public class Format {
     static String itemJsltConversion = null;
     static Instant lastJsltUpdate = Instant.ofEpochMilli(0);
 
+    public static Map<String, String> guidReverseLookup = new HashMap<>();
+
     private static List<Consumer<Object>> lookupFunctions = new ArrayList<>();
     static {
         try {
@@ -200,6 +202,9 @@ public class Format {
         List<Map> elements = (List<Map>) responseMap.get(listName);
         for (Map element : elements) {
             nameToGuidResult.put((String)element.get(property), (String)element.get("id"));
+
+            // So we can reverse-lookup the GUIDS back to whatever we had.
+            guidReverseLookup.put((String)element.get("id"), (String)element.get(property));
         }
 
         lookupFunctions.add( o -> jsltFolioLookup(o, lookupCode, nameToGuidResult) );

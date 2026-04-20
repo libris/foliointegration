@@ -2,6 +2,9 @@ package se.kb.libris.foliointegration;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.schibsted.spt.data.jslt.Expression;
+import com.schibsted.spt.data.jslt.Parser;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -9,15 +12,30 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.*;
 
 public class LibrisWriteBack {
+
+    static String temporaryJslt = """
+            let root = (.) // root is the folio holding record
+            
+            [
+              // In the holding record, "items" (the FOLIO items) have been artificially added.
+              // Wherever a GUID is found (if not under {"id": ...}) the GUID will have been replaced
+              // by whatever we've previously mapped that GUID to, if anything (for transforming in the other direction)
+              // The result of this must be a new hasComponent list for the Libris holding record:
+              for (.items)
+              {
+                "hasNote": {"@type": "Note", "label": $root.permanentLocationId},
+                "shelfMark" : {"@type": "ShelfMark", "label": .barcode }
+              }
+            ]
+            
+            """;
 
     public static boolean run() {
 
@@ -76,10 +94,42 @@ public class LibrisWriteBack {
             Map itemsMap = Storage.mapper.readValue(itemsString, Map.class);
             holdingMap.put("items", itemsMap.get("items"));
 
+            doReverseLookups(holdingMap);
+
             Storage.log(" **** ready for transfrom for: " + holdingId + ":\n" + Storage.mapper.writeValueAsString(holdingMap));
+
+            Expression writebackJSLT = Parser.compileString(temporaryJslt, new ArrayList<>()); // no extra functions for now.
+            JsonNode originalJsonNode = Storage.mapper.valueToTree(holdingMap);
+            JsonNode transformedJsonNode = writebackJSLT.apply(originalJsonNode);
+            List librisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
+
+            Storage.log(" **** Transformed component list for : " + holdingId + ":\n" + Storage.mapper.writeValueAsString(librisComponentList));
 
         } catch (Exception e) {
             Storage.log("Failed handling KAFKA event. The value received from KAFKA was this:\n" + event, e);
+        }
+    }
+
+    // Turn GUIDS (where we know what they mean) back into meaningful strings.
+    private static void doReverseLookups(Object folioData)
+    {
+        if (folioData instanceof Map m) {
+            for (Object key : m.keySet()) {
+                if (!key.equals("id")) {
+
+                    if (m.get(key) instanceof String s) {
+                        if (Format.guidReverseLookup.containsKey(s)) {
+                            m.put(key, Format.guidReverseLookup.get(s));
+                        }
+                    }
+
+                    doReverseLookups(m.get(key));
+                }
+            }
+        } else if(folioData instanceof List l) {
+            for (Object o : l) {
+                doReverseLookups(o);
+            }
         }
     }
 }

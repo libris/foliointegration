@@ -5,12 +5,27 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.schibsted.spt.data.jslt.Expression;
 import com.schibsted.spt.data.jslt.Parser;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.ProtocolException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.util.TimeValue;
+import org.apache.hc.core5.util.Timeout;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.serialization.StringDeserializer;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.*;
 
@@ -22,20 +37,24 @@ public class LibrisWriteBack {
 
     static String temporaryJslt = """
             let root = (.) // root is the folio holding record
-            
+
             [
-              // In the holding record, "items" (the FOLIO items) have been artificially added.
-              // Wherever a GUID is found (if not under {"id": ...}) the GUID will have been replaced
-              // by whatever we've previously mapped that GUID to, if anything (for transforming in the other direction)
-              // The result of this must be a new hasComponent list for the Libris holding record:
-              for (.items)
-              {
-                "hasNote": {"@type": "Note", "label": $root.permanentLocationId},
-                "shelfMark" : {"@type": "ShelfMark", "label": .barcode }
-              }
+                 // In the holding record, "items" (the FOLIO items) have been artificially added.
+                 // The "librisLibraryUri"-property is also artificially added.
+                 // Wherever a GUID is found (if not under {"id": ...}) the GUID will have been replaced
+                 // by whatever we've previously mapped that GUID to, if anything (for transforming in the other direction).
+                 // The result of this transform must be a new hasComponent list for the Libris holding record:
+                 for (.items) {
+                     "heldBy": {"@id": $root.librisLibraryUri},
+                     "hasNote": {"@type": "Note", "label": $root.permanentLocationId},
+                     "shelfMark" : {"@type": "ShelfMark", "label": .barcode }
+                 }
             ]
             
+            
             """;
+
+    static String LIBRIS_BASE_URL = System.getenv("LIBRIS_BASE_URL");
 
     public static boolean run() {
 
@@ -84,9 +103,12 @@ public class LibrisWriteBack {
             String holdingId = (String) item.get("holdingsRecordId");
             String holdingString = FolioWriting.getFromFolio("/holdings-storage/holdings/" + holdingId);
             //Storage.log(" **** fetched holding: " + holdingString);
-
-
             Map holdingMap = Storage.mapper.readValue(holdingString, Map.class);
+
+            String instanceId = (String) holdingMap.get("instanceId");
+            String instanceString = FolioWriting.getFromFolio("/instance-storage/instances/" + instanceId);
+            Map instanceMap = Storage.mapper.readValue(instanceString, Map.class);
+            String librisInstanceUri = (String) instanceMap.get("sourceUri");
 
             String itemsString = FolioWriting.getFromFolio("/inventory/items-by-holdings-id?offset=0&limit=2000&query=holdingsRecordId=" + holdingId);
             //Storage.log(" **** fetched items for holding: " + holdingId + ":\n" + itemsString);
@@ -96,7 +118,18 @@ public class LibrisWriteBack {
 
             doReverseLookups(holdingMap);
 
-            Storage.log(" **** ready for transfrom for: " + holdingId + ":\n" + Storage.mapper.writeValueAsString(holdingMap));
+            // TEMP, ASSUMPTIONS ABOUT KB SIGEL BASED ON LOCATION. THIS SHOULD NOT REMAIN
+            String sigel = "S";
+            if (holdingMap.get("permanentLocationId").equals("Rogge"))
+                sigel = "SRo";
+
+            // Library URIs are *not* env-specific..
+            //String libraryUri = new URI(LIBRIS_BASE_URL).resolve("/library/"+sigel).toString();
+            String libraryUri = new URI("https://libris.kb.se/library/"+sigel).toString();
+
+            holdingMap.put("librisLibraryUri", libraryUri);
+
+            Storage.log(" **** ready for transform for: " + holdingId + ":\n" + Storage.mapper.writeValueAsString(holdingMap));
 
             Expression writebackJSLT = Parser.compileString(temporaryJslt, new ArrayList<>()); // no extra functions for now.
             JsonNode originalJsonNode = Storage.mapper.valueToTree(holdingMap);
@@ -105,8 +138,38 @@ public class LibrisWriteBack {
 
             Storage.log(" **** Transformed component list for : " + holdingId + ":\n" + Storage.mapper.writeValueAsString(librisComponentList));
 
+            // Having a libris bilbliographic URI + Library URI means we can identify the libris holding record in question.
+            String[] librisHoldingAndEtag = doLibrisGet("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
+            Storage.log(" **** LIBRIS HOLDING: " + librisHoldingAndEtag[0] + " ETAG: " + librisHoldingAndEtag[1]);
+
+
         } catch (Exception e) {
             Storage.log("Failed handling KAFKA event. The value received from KAFKA was this:\n" + event, e);
+        }
+    }
+
+    // Returns response (0) and ETAG (1) (or throws)
+    private static String[] doLibrisGet(String path) throws IOException, URISyntaxException, ProtocolException {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+            URI uri = new URI(LIBRIS_BASE_URL);
+            uri = uri.resolve(path);
+
+            Storage.log("Doing FINDHOLD: " + uri.toString());
+
+            HttpGet request = new HttpGet(uri);
+            RequestConfig config = RequestConfig.custom()
+                    .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+            request.setConfig(config);
+
+            request.setHeader("Accept", "application/ld+json");
+            ClassicHttpResponse response = httpClient.execute(request);
+            Header etagHeader =  response.getHeader("ETag");
+            String etag = null;
+            if (etagHeader != null)
+                etag = etagHeader.getValue();
+            String responseText = EntityUtils.toString(response.getEntity());
+            String[] tuple = {responseText, etag};
+            return tuple;
         }
     }
 

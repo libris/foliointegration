@@ -247,7 +247,7 @@ public class FolioWriting {
         ClassicHttpResponse response = httpClient.execute(request);
         String responseText = EntityUtils.toString(response.getEntity());
 
-        // respone looks like so: {"generator":"inventory_itemBarcode","sequence":"itemBarcode","status":"OK","nextValue":"0000000003"}
+        // response looks like so: {"generator":"inventory_itemBarcode","sequence":"itemBarcode","status":"OK","nextValue":"0000000003"}
         Map responseMap = Storage.mapper.readValue(responseText, Map.class);
         if (responseMap.get("status").equals("OK") && responseMap.get("nextValue") != null && responseMap.get("nextValue") instanceof String code) {
             return code;

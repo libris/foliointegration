@@ -74,6 +74,12 @@ The (comma-separated) list of SIGEL codes (library identification codes) to writ
 many libraries. This parameters tells the application what parts of the data in libris to write to this particular FOLIO instance
 
 `
+LIBRIS_BASE_URL
+`
+The base URL of LibrisXL. This is needed in order to construct library URIs and for writing back items. For production set this
+to `https://libris.kb.se/` for testing you would typically use `https://libris-qa.kb.se/`. 
+
+`
 INITIAL_LIBRIS_SYNC_TIME
 `
 This parameter is optional and can be omitted. It tells the system the time from which it should consider itself up

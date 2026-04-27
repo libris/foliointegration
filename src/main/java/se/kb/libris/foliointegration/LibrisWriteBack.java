@@ -98,49 +98,52 @@ public class LibrisWriteBack {
             Map eventMap = Storage.mapper.readValue(event, Map.class);
             Long eventTimeStamp = (Long) eventMap.get("eventTs");
 
-            // Both creations and edits have "new" (updates also have "old").
+            // Both creations and edits have "new" (updates also have "old"). Get the folio holding
             Map item = (Map) eventMap.get("new");
             String holdingId = (String) item.get("holdingsRecordId");
             String holdingString = FolioWriting.getFromFolio("/holdings-storage/holdings/" + holdingId);
-            //Storage.log(" **** fetched holding: " + holdingString);
             Map holdingMap = Storage.mapper.readValue(holdingString, Map.class);
 
+            // Get the folio instance
             String instanceId = (String) holdingMap.get("instanceId");
             String instanceString = FolioWriting.getFromFolio("/instance-storage/instances/" + instanceId);
             Map instanceMap = Storage.mapper.readValue(instanceString, Map.class);
             String librisInstanceUri = (String) instanceMap.get("sourceUri");
 
+            // Get all the items for this holding, and "put them in" the holding
             String itemsString = FolioWriting.getFromFolio("/inventory/items-by-holdings-id?offset=0&limit=2000&query=holdingsRecordId=" + holdingId);
-            //Storage.log(" **** fetched items for holding: " + holdingId + ":\n" + itemsString);
-
             Map itemsMap = Storage.mapper.readValue(itemsString, Map.class);
             holdingMap.put("items", itemsMap.get("items"));
-
             doReverseLookups(holdingMap);
 
+            // Figure out which libris library this is about
             // TEMP, ASSUMPTIONS ABOUT KB SIGEL BASED ON LOCATION. THIS SHOULD NOT REMAIN
             String sigel = "S";
             if (holdingMap.get("permanentLocationId").equals("Rogge"))
                 sigel = "SRo";
-
             // Library URIs are *not* env-specific..
             //String libraryUri = new URI(LIBRIS_BASE_URL).resolve("/library/"+sigel).toString();
             String libraryUri = new URI("https://libris.kb.se/library/"+sigel).toString();
-
             holdingMap.put("librisLibraryUri", libraryUri);
 
-            Storage.log(" **** ready for transform for: " + holdingId + ":\n" + Storage.mapper.writeValueAsString(holdingMap));
+            // Having a libris bibliographic URI + Library URI means we can identify the libris holding record in question.
+            URI findHoldUri = new URI(LIBRIS_BASE_URL);
+            findHoldUri = findHoldUri.resolve("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
+            String[] librisHoldingUriListAndEtag = doLibrisGet(findHoldUri);
+            List librisHoldingUriList = Storage.mapper.readValue(librisHoldingUriListAndEtag[0], List.class);
+            if (librisHoldingUriList.isEmpty())
+                throw new RuntimeException("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri);
+            String librisHoldingUri = (String) librisHoldingUriList.get(0);
+            String[] librisHoldingRecordAndEtag = doLibrisGet( new URI(librisHoldingUri) );
+            Storage.log("Libris holding: " + librisHoldingRecordAndEtag[0] + "\nETAG: " + librisHoldingRecordAndEtag[1]);
 
+            // Apply the JSLT transform to our folio holding and items, to get a libris component-list
+            //Storage.log(" **** ready for transform for: " + holdingId + ":\n" + Storage.mapper.writeValueAsString(holdingMap));
             Expression writebackJSLT = Parser.compileString(temporaryJslt, new ArrayList<>()); // no extra functions for now.
             JsonNode originalJsonNode = Storage.mapper.valueToTree(holdingMap);
             JsonNode transformedJsonNode = writebackJSLT.apply(originalJsonNode);
             List librisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
-
-            Storage.log(" **** Transformed component list for : " + holdingId + ":\n" + Storage.mapper.writeValueAsString(librisComponentList));
-
-            // Having a libris bilbliographic URI + Library URI means we can identify the libris holding record in question.
-            String[] librisHoldingAndEtag = doLibrisGet("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
-            Storage.log(" **** LIBRIS HOLDING: " + librisHoldingAndEtag[0] + " ETAG: " + librisHoldingAndEtag[1]);
+            //Storage.log(" **** Transformed component list for : " + holdingId + ":\n" + Storage.mapper.writeValueAsString(librisComponentList));
 
 
         } catch (Exception e) {
@@ -149,12 +152,8 @@ public class LibrisWriteBack {
     }
 
     // Returns response (0) and ETAG (1) (or throws)
-    private static String[] doLibrisGet(String path) throws IOException, URISyntaxException, ProtocolException {
+    private static String[] doLibrisGet(URI uri) throws IOException, ProtocolException {
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
-            URI uri = new URI(LIBRIS_BASE_URL);
-            uri = uri.resolve(path);
-
-            Storage.log("Doing FINDHOLD: " + uri.toString());
 
             HttpGet request = new HttpGet(uri);
             RequestConfig config = RequestConfig.custom()
@@ -163,10 +162,15 @@ public class LibrisWriteBack {
 
             request.setHeader("Accept", "application/ld+json");
             ClassicHttpResponse response = httpClient.execute(request);
+
+            /*for (Header h : response.getHeaders()) {
+                Storage.log("*** HEADER ?? : " +h);
+            }*/
             Header etagHeader =  response.getHeader("ETag");
             String etag = null;
             if (etagHeader != null)
                 etag = etagHeader.getValue();
+
             String responseText = EntityUtils.toString(response.getEntity());
             String[] tuple = {responseText, etag};
             return tuple;

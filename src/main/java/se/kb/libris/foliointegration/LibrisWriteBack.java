@@ -135,16 +135,27 @@ public class LibrisWriteBack {
                 throw new RuntimeException("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri);
             String librisHoldingUri = (String) librisHoldingUriList.get(0);
             String[] librisHoldingRecordAndEtag = doLibrisGet( new URI(librisHoldingUri) );
-            Storage.log("Libris holding: " + librisHoldingRecordAndEtag[0] + "\nETAG: " + librisHoldingRecordAndEtag[1]);
+            Map librisHoldingMap = Storage.mapper.readValue(librisHoldingRecordAndEtag[0], Map.class);
+            //Storage.log("Libris holding: " + librisHoldingRecordAndEtag[0] + "\nETAG: " + librisHoldingRecordAndEtag[1]);
 
             // Apply the JSLT transform to our folio holding and items, to get a libris component-list
             //Storage.log(" **** ready for transform for: " + holdingId + ":\n" + Storage.mapper.writeValueAsString(holdingMap));
             Expression writebackJSLT = Parser.compileString(temporaryJslt, new ArrayList<>()); // no extra functions for now.
             JsonNode originalJsonNode = Storage.mapper.valueToTree(holdingMap);
             JsonNode transformedJsonNode = writebackJSLT.apply(originalJsonNode);
-            List librisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
-            //Storage.log(" **** Transformed component list for : " + holdingId + ":\n" + Storage.mapper.writeValueAsString(librisComponentList));
+            List newLibrisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
+            //Storage.log(" **** Transformed component list for : " + holdingId + ":\n" + Storage.mapper.writeValueAsString(newLibrisComponentList));
 
+            // Replace the old hasComponent list with the new one.
+
+            List graphList = (List) librisHoldingMap.get("@graph");
+            while (graphList.size() > 2) { // we don't want "lens cards" and such crap, just the plain data for this record.
+                graphList.removeLast();
+            }
+            Map mainEntity = (Map) graphList.get(1);
+            mainEntity.put("hasComponent", newLibrisComponentList);
+            librisHoldingMap.remove("@context");
+            Storage.log("  ** Ready to write to libris?: " + Storage.mapper.writeValueAsString(librisHoldingMap));
 
         } catch (Exception e) {
             Storage.log("Failed handling KAFKA event. The value received from KAFKA was this:\n" + event, e);
@@ -170,6 +181,8 @@ public class LibrisWriteBack {
             String etag = null;
             if (etagHeader != null)
                 etag = etagHeader.getValue();
+
+            // Libris ETags are weak (start with "W/"), this might have to be stripped out before sending back.
 
             String responseText = EntityUtils.toString(response.getEntity());
             String[] tuple = {responseText, etag};

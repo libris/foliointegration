@@ -194,9 +194,10 @@ public class LibrisWriteBack {
     private static void doReverseLookups(Object folioData)
     {
         if (folioData instanceof Map m) {
+            // This is surprisingly OK! One would think it would throw a ConcurrentModification thingy?
+            // But is actually OK since the keyset remains unchanged (only the value is replaced). TIL.
             for (Object key : m.keySet()) {
                 if (!key.equals("id")) {
-
                     if (m.get(key) instanceof String s) {
                         if (Format.guidReverseLookup.containsKey(s)) {
                             m.put(key, Format.guidReverseLookup.get(s));
@@ -207,9 +208,18 @@ public class LibrisWriteBack {
                 }
             }
         } else if(folioData instanceof List l) {
-            for (Object o : l) {
-                doReverseLookups(o);
+            Iterator it = l.iterator();
+            List<String> toBeAdded = new ArrayList<>(1);
+            while(it.hasNext()) {
+                Object o = it.next();
+                if (o instanceof String s && Format.guidReverseLookup.containsKey(s)) {
+                    it.remove();
+                    toBeAdded.add(Format.guidReverseLookup.get(s));
+                } else {
+                    doReverseLookups(o);
+                }
             }
+            l.addAll(toBeAdded);
         }
     }
 }

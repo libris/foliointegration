@@ -35,7 +35,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.*;
 
 public class LibrisWriteBack {
 
-    static String temporaryJslt = """
+    /*static String temporaryJslt = """
             let root = (.) // root is the folio holding record
 
             [
@@ -52,7 +52,7 @@ public class LibrisWriteBack {
             ]
             
             
-            """;
+            """;*/
 
     static String LIBRIS_BASE_URL = System.getenv("LIBRIS_BASE_URL");
 
@@ -140,7 +140,7 @@ public class LibrisWriteBack {
 
             // Apply the JSLT transform to our folio holding and items, to get a libris component-list
             //Storage.log(" **** ready for transform for: " + holdingId + ":\n" + Storage.mapper.writeValueAsString(holdingMap));
-            Expression writebackJSLT = Parser.compileString(temporaryJslt, new ArrayList<>()); // no extra functions for now.
+            Expression writebackJSLT = Parser.compileString(Format.librisWritebackJsltConversion, new ArrayList<>()); // no extra functions for now.
             JsonNode originalJsonNode = Storage.mapper.valueToTree(holdingMap);
             JsonNode transformedJsonNode = writebackJSLT.apply(originalJsonNode);
             List newLibrisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);

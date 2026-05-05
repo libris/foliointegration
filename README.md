@@ -129,6 +129,12 @@ This works the same way as the parameter above, but instead specifies where to l
 holdings-records into FOLIO items.
 
 `
+LIBRIS_WRITEBACK_JSLT_URL
+`
+This works the same way as the parameter above, but instead specifies where to look for the JSLT file that converts FOLIO
+items back to Libris items
+
+`
 FOLIO_KAFKA_CLIENT_CERT
 `
 This is the PEM certificate string to send to FOLIO, essentially the "Kafka password".

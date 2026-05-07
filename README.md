@@ -74,6 +74,12 @@ The (comma-separated) list of SIGEL codes (library identification codes) to writ
 many libraries. This parameters tells the application what parts of the data in libris to write to this particular FOLIO instance
 
 `
+LIBRIS_BASE_URL
+`
+The base URL of LibrisXL. This is needed in order to construct library URIs and for writing back items. For production set this
+to `https://libris.kb.se/` for testing you would typically use `https://libris-qa.kb.se/`. 
+
+`
 INITIAL_LIBRIS_SYNC_TIME
 `
 This parameter is optional and can be omitted. It tells the system the time from which it should consider itself up
@@ -122,9 +128,25 @@ ITEM_JSLT_URL
 This works the same way as the parameter above, but instead specifies where to look for the JSLT file that converts Libris
 holdings-records into FOLIO items.
 
+`
+LIBRIS_WRITEBACK_JSLT_URL
+`
+This works the same way as the parameter above, but instead specifies where to look for the JSLT file that converts FOLIO
+items back to Libris items
+
+`
+FOLIO_KAFKA_CLIENT_CERT
+`
+This is the PEM certificate string to send to FOLIO, essentially the "Kafka password".
+
+`
+FOLIO_KAFKA_SERVERS
+`
+This is the (optionally comma separated list of) Kafka "bootstrap" broker uris. Essentially the Kafka server host/port
+
 
 ## Development
 
 To run locally (for development), assuming a locally running EMM server and XL REST API:
 
-`EMM_BASE_URL="http://localhost:8186/" FOLIO_USER="..." FOLIO_PASS="..." OKAPI_URL="https://okapi-folio-snapshot.okd-test.kb.se" OKAPI_TENANT="kbtest1" SIGEL="X,S" FOLIO_WRITE_BATCH_SIZE="20" FOLIO_WRITE_BATCHES_PER_CELL="50" FOLIO_WRITE_CELL_SECONDS="1" INSTANCE_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt" HOLDING_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/holding.jslt" ITEM_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt" java -DDBPATH=/tmp/libris.sqlite3 -jar build/libs/foliolibrisintegration.jar`
+`FOLIO_KAFKA_SERVERS="folio-inttest-kafka-bootstrap.apps.fusionhg.kb.local:443" FOLIO_KAFKA_CLIENT_CERT="-----BEGIN CERTIFICATE-----...." EMM_BASE_URL="http://localhost:8186/" FOLIO_USER="..." FOLIO_PASS="..." OKAPI_URL="https://okapi-folio-snapshot.okd-test.kb.se" OKAPI_TENANT="kbtest1" SIGEL="X,S" FOLIO_WRITE_BATCH_SIZE="20" FOLIO_WRITE_BATCHES_PER_CELL="50" FOLIO_WRITE_CELL_SECONDS="1" INSTANCE_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/instance.jslt" HOLDING_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/holding.jslt" ITEM_JSLT_URL="https://git.kb.se/libris-folio/format-conversion/-/raw/develop/public/item.jslt" java -DDBPATH=/tmp/libris.sqlite3 -jar build/libs/foliolibrisintegration.jar`

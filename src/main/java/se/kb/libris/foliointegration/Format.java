@@ -34,7 +34,10 @@ public class Format {
     static String instanceJsltConversion = null;
     static String holdingJsltConversion = null;
     static String itemJsltConversion = null;
+    public static String librisWritebackJsltConversion = null;
     static Instant lastJsltUpdate = Instant.ofEpochMilli(0);
+
+    public static Map<String, String> guidReverseLookup = new HashMap<>();
 
     private static List<Consumer<Object>> lookupFunctions = new ArrayList<>();
     static {
@@ -200,6 +203,9 @@ public class Format {
         List<Map> elements = (List<Map>) responseMap.get(listName);
         for (Map element : elements) {
             nameToGuidResult.put((String)element.get(property), (String)element.get("id"));
+
+            // So we can reverse-lookup the GUIDS back to whatever we had.
+            guidReverseLookup.put((String)element.get("id"), (String)element.get(property));
         }
 
         lookupFunctions.add( o -> jsltFolioLookup(o, lookupCode, nameToGuidResult) );
@@ -224,6 +230,7 @@ public class Format {
         String instanceJsltUrl = System.getenv("INSTANCE_JSLT_URL");
         String holdingJsltUrl = System.getenv("HOLDING_JSLT_URL");
         String itemJsltUrl = System.getenv("ITEM_JSLT_URL");
+        String writebackJsltUrl = System.getenv("LIBRIS_WRITEBACK_JSLT_URL");
 
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
@@ -289,6 +296,28 @@ public class Format {
                     if (itemJsltConversion == null || !itemJsltConversion.equals(responseText) ) {
                         itemJsltConversion = responseText;
                         Storage.log("Obtained a new set of conversion rules (item).");
+                    }
+                }
+            }
+
+            // Get write-back conversion
+            {
+                URI uri = new URI(writebackJsltUrl);
+                HttpGet request = new HttpGet(uri);
+                RequestConfig config = RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                request.setConfig(config);
+                ClassicHttpResponse response = httpClient.execute(request);
+                String responseText = EntityUtils.toString(response.getEntity());
+                if (response.getCode() != 200) {
+                    Storage.log("Failed JSLT (writeback) lookup: " + response);
+                    return false;
+                }
+
+                if (responseText != null) {
+                    if (librisWritebackJsltConversion == null || !librisWritebackJsltConversion.equals(responseText) ) {
+                        librisWritebackJsltConversion = responseText;
+                        Storage.log("Obtained a new set of conversion rules (writeback).");
                     }
                 }
             }

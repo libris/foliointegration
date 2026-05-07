@@ -86,8 +86,8 @@ public class Server {
         server.start();
 
         // TEMP
-        LibrisWriteBack.run();
-        System.exit(0);
+        //LibrisWriteBack.run();
+        //System.exit(0);
 
         // The main loop
         while (true) {

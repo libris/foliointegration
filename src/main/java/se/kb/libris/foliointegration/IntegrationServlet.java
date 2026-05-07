@@ -122,6 +122,31 @@ public class IntegrationServlet extends HttpServlet {
                 }
                 break;
             }
+            case "/foliototalsync": {
+                String line = request.getReader().readLine();
+                if (line.equals("force=on"))
+                    Server.requestClearChecksums();
+                 Server.requestTotalFolioSync();
+                // Now WAIT for the changes to take effect before redirecting back to render the page.
+                while (Server.getRequestedClearChecksums() || Server.getRequestedTotalFolioSync()) {
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {/* ignore */}
+                }
+                response.sendRedirect("/");
+                break;
+            }
+            case "/cancelfoliototalsync": {
+                Server.requestCancelTotalFolioSync();
+                // Now WAIT for the changes to take effect before redirecting back to render the page.
+                while (Server.getRequestedCancelTotalFolioSync()) {
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {/* ignore */}
+                }
+                response.sendRedirect("/");
+                break;
+            }
             default:
                 Storage.log("Suspicious POST to " + request.getServletPath() + " (ignoring).");
         }
@@ -288,6 +313,53 @@ public class IntegrationServlet extends HttpServlet {
 
             } else {
                 String s = "<br/>Odd FOLIO sync state. Shouldn't happen.<br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+            }
+        }
+
+        // FOLIO TOTAL sync state
+        {
+            String syncedTo = Storage.getState(FolioTotalSync.SYNCED_TO_ID_KEY, readOnlyConnection);
+            if (syncedTo == null) {
+                String s = "<hr><br/>Re-synchronize all FOLIO instances with LIBRIS.<br/><br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+
+                s = """
+                        <form action="/foliototalsync" method="post">
+                            <label for="foliototalsync">Clear any/all last-written-checksums (essentially forcing writes to FOLIO)</label>
+                            <input id="foliototalsync" name="force" type="checkbox">
+                            <br/>
+                            <input type="submit" value="Start total sync">
+                        </form>
+                        """.stripIndent();
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+                s = " <br/><br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+
+            } else {
+                String s = "<hr><br/>Re-synchronizing all FOLIO instances with LIBRIS.<br/><br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+
+                Long maxEntityId = 0L;
+                try (PreparedStatement statement = readOnlyConnection.prepareStatement("SELECT MAX(id) FROM entities")) {
+                    statement.execute();
+                    try (ResultSet resultSet = statement.getResultSet()) {
+                        while (resultSet.next()) {
+                            maxEntityId = resultSet.getLong(1);
+                        }
+                    }
+                }
+
+                Long syncedToLongId = Long.parseLong(syncedTo);
+                double progress = (double) syncedToLongId / (double) maxEntityId;
+
+                int percent = (int) (100.0f * progress);
+                s = "<label>Progress:</label><progress value=\"" + percent +  "\" max=\"100\"> " + percent +  "% </progress> <br/><br/>";
+                s += """
+                        <form action="/cancelfoliototalsync" method="post">
+                            <input type="submit" value="Cancel">
+                        </form>
+                        """;
                 os.write(s.getBytes(StandardCharsets.UTF_8));
             }
         }

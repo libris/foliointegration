@@ -8,6 +8,8 @@ import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.util.thread.ExecutorThreadPool;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 
@@ -45,6 +47,9 @@ public class Server {
     // about concurrency with sqlite.
     private static long requestedNewEmmTime = 0;
     private static long requestedNewFolioTime = 0;
+    private static boolean requestedClearChecksums = false;
+    private static boolean requestedTotalFolioSync = false;
+    private static boolean requestedCancelTotalFolioSync = false;
     public static synchronized void requestChangedEmmTime(long newTime) {
         requestedNewEmmTime = newTime;
     }
@@ -56,6 +61,24 @@ public class Server {
     }
     public static synchronized long getRequestedNewFolioTime() {
         return requestedNewFolioTime;
+    }
+    public static synchronized void requestClearChecksums() {
+        requestedClearChecksums = true;
+    }
+    public static synchronized void requestTotalFolioSync() {
+        requestedTotalFolioSync = true;
+    }
+    public static synchronized void requestCancelTotalFolioSync() {
+        requestedCancelTotalFolioSync = true;
+    }
+    public static synchronized boolean getRequestedClearChecksums() {
+        return requestedClearChecksums;
+    }
+    public static synchronized boolean getRequestedTotalFolioSync() {
+        return requestedTotalFolioSync;
+    }
+    public static synchronized boolean getRequestedCancelTotalFolioSync() {
+        return requestedCancelTotalFolioSync;
     }
 
     public static void main(String[] args) throws Exception {
@@ -113,11 +136,29 @@ public class Server {
                                 Storage.log("FOLIO sync time MANUALLY changed to: " + requestedNewFolioTime);
                                 requestedNewFolioTime = 0;
                             }
+                            if (requestedClearChecksums) {
+                                try (PreparedStatement statement = connection.prepareStatement("DELETE FROM exported_checksum")) {
+                                    statement.execute();
+                                }
+                                requestedClearChecksums = false;
+                                Storage.log("Clearing of all FOLIO write checksums ordered.");
+                            }
+                            if (requestedTotalFolioSync) {
+                                Storage.writeState(FolioTotalSync.SYNCED_TO_ID_KEY, "0", connection);
+                                requestedTotalFolioSync = false;
+                                Storage.log("FOLIO total sync manually ordered.");
+                            }
+                            if (requestedCancelTotalFolioSync) {
+                                Storage.clearState(FolioTotalSync.SYNCED_TO_ID_KEY, connection);
+                                requestedCancelTotalFolioSync = false;
+                                Storage.log("FOLIO total sync manually cancelled.");
+                            }
                         }
 
                         boolean runAgainImmediately = false;
                         runAgainImmediately |= EmmSync.run();
                         runAgainImmediately |= FolioSync.run();
+                        runAgainImmediately |= FolioTotalSync.run();
                         if (!runAgainImmediately) {
                             Thread.sleep(100);
                         }

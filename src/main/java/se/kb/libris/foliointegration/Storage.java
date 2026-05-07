@@ -113,9 +113,11 @@ public class Storage {
 
     private static synchronized void initDb(Connection connection) throws SQLException {
         {
+            // The "autoincrement" increases insert time a little, but enables trusting the rowid to increase
+            // monotonically, which is needed/used by the total sync to FOLIO.
             String sql = """
                     CREATE TABLE entities (
-                        id INTEGER PRIMARY KEY,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                         uri TEXT,
                         entity BLOB,
                         modified INTEGER,

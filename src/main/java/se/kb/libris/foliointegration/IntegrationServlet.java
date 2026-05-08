@@ -124,7 +124,7 @@ public class IntegrationServlet extends HttpServlet {
             }
             case "/foliototalsync": {
                 String line = request.getReader().readLine();
-                if (line.equals("force=on"))
+                if (line != null && line.equals("force=on"))
                     Server.requestClearChecksums();
                  Server.requestTotalFolioSync();
                 // Now WAIT for the changes to take effect before redirecting back to render the page.

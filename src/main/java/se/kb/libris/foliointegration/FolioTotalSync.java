@@ -39,6 +39,7 @@ public class FolioTotalSync {
         if (ids.isEmpty()) {
             Storage.clearState(SYNCED_TO_ID_KEY, connection);
             Storage.log("Total sync (instances) to FOLIO completed.");
+            return false;
         }
 
         for (Long id : ids) {

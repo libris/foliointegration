@@ -37,6 +37,8 @@ public class FolioWriting {
     private static final long folioCellSeconds;
 
     private static List<Map> batch = new ArrayList<>();
+    private static Deque<BatchWriteResult> writeResultsToFinalize = new ArrayDeque<>();
+    private static ArrayList<Thread> writerThreads = new ArrayList<>(100);
 
     private static long folioTokenValidUntil = 0;
     private static String folioToken = null;
@@ -289,28 +291,18 @@ public class FolioWriting {
         }
     }
 
-    public static synchronized void flushQueue(Connection connection) throws IOException, InterruptedException, SQLException {
-        if (batch.isEmpty())
-            return;
+    private record BatchWriteResult (
+            boolean success, // Definition: sent to folio and got a response (be it written or rejected). If false, we might not be in contact at all.
+            List<String> writtenIDs,
+            List<String> failedHridsInBatch,
+            List<String> errorMessagesInBatch,
+            HashMap<String, ArrayList<String>> instanceHRIDsToHoldingsHRIDsWithItems
+    ) {}
 
-        HashMap<String, ArrayList<String>> instanceHRIDsToHoldingsHRIDsWithItems = clearItemsUnlessAllowed(batch, connection);
-
-        //Storage.log("BATCH FIRST:  " + Storage.mapper.writeValueAsString( batch.getFirst() ) );
-        // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
-        /*if (1 == 1) {
-            List<String> writtenIDs = new ArrayList<>();
-            for (Map record : batch) {
-                writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
-            }
-            Storage.log("[WOULD HAVE] Written (but not live) " + batch.size() + " records to FOLIO: " + writtenIDs);
-            batch.clear();
-            return;
-        }*/
-        // REMOVE THIS
-
+    private static void sendParallell(HashMap<String, ArrayList<String>> instanceHRIDsToHoldingsHRIDsWithItems, List<Map> localBatch) {
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
             // Throttle if necessary
-            while (true) {
+            /*while (true) {
                 Instant now = Instant.now();
                 if (now.isAfter( throttlingCell.plus(folioCellSeconds, ChronoUnit.SECONDS) ) ) {
                     throttlingCell = now;
@@ -324,16 +316,16 @@ public class FolioWriting {
                 else {
                     try {
                         Thread.sleep(1);
-                    } catch (InterruptedException ie) { /* ignore */ }
+                    } catch (InterruptedException ie) { /* ignore * }
                 }
-            }
+            }*/
 
             String token = getToken();
 
             // Fetch barcodes from FOLIO and insert them now (at the last possible instant).
-            insertBarCodes(httpClient, token, batch);
+            insertBarCodes(httpClient, token, localBatch);
 
-            Map recordSet = Map.of("inventoryRecordSets", batch);
+            Map recordSet = Map.of("inventoryRecordSets", localBatch);
             String body = Storage.mapper.writeValueAsString(recordSet);
 
             //Storage.log(" SENDING: " + body);
@@ -367,18 +359,18 @@ public class FolioWriting {
                 // the batch size to 1.
                 Map responseMap = Storage.mapper.readValue(responseText, Map.class);
                 if (responseMap.containsKey("errors")) {
-                    if ( responseMap.get("errors") instanceof List errors) {
+                    if (responseMap.get("errors") instanceof List errors) {
                         for (Object o : errors) {
-                            if ( o instanceof Map error) {
+                            if (o instanceof Map error) {
                                 //Storage.log("FOLIO rejection: " + Storage.mapper.writeValueAsString(error) );
-                                Storage.log("FOLIO rejection: " + Storage.mapper.writeValueAsString(error.get("message")) );
+                                Storage.log("FOLIO rejection: " + Storage.mapper.writeValueAsString(error.get("message")));
 
-                                if ( error.get("entity") instanceof Map requesEntity) {
-                                    if ( requesEntity.get("hrid") instanceof String hridBroken) {
+                                if (error.get("entity") instanceof Map requesEntity) {
+                                    if (requesEntity.get("hrid") instanceof String hridBroken) {
                                         failedHridsInBatch.add(hridBroken);
                                     }
                                 }
-                                if ( error.get("message") != null) {
+                                if (error.get("message") != null) {
                                     errorMessagesInBatch.add(Storage.mapper.writeValueAsString(error.get("message")));
                                 } else {
                                     errorMessagesInBatch.add("No message in error response.");
@@ -394,81 +386,147 @@ public class FolioWriting {
                 // downtimes, or something else entirely. We cannot proceed without a retry.
 
                 Storage.log("Failed FOLIO write: " + response + " / " + responseText);
+                writeResultsToFinalize.push(new BatchWriteResult(false, null, null, null, null));
                 return;
             }
 
-            // IF OK
+            //Storage.log(" POST WRITE OF : " + localBatch.size() + " RESPONSE STILL " + response.getCode());
+
+            // Write was more or less OK (partially or completely)!
             List<String> writtenIDs = new ArrayList<>();
-            for (Map record : batch) {
+            for (Map record : localBatch) {
                 writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
             }
             writtenIDs.removeAll(failedHridsInBatch);
             if (failedHridsInBatch.isEmpty()) {
                 Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs);
             } else {
-
-                // Mark failed exports for human scrutiny
-                for (int j = 0; j < failedHridsInBatch.size(); ++j) {
-                    String failedHrid = failedHridsInBatch.get(j);
-                    String message = errorMessagesInBatch.get(j);
-                    String sql = """
-                            INSERT OR REPLACE INTO export_failures (hrid, short_message, time) VALUES(?, ?, ?);
-                            """;
-                    try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                        statement.setString(1, failedHrid);
-                        statement.setString(2, message);
-                        statement.setString(3, ZonedDateTime.now().toString());
-                        statement.execute();
-                    }
-                    try (PreparedStatement statement = connection.prepareStatement("DELETE FROM exported_checksum WHERE hrid = ?")) {
-                        statement.setString(1, failedHrid);
-                        statement.execute();
-                    }
-                }
-
                 Storage.log("Wrote " + writtenIDs.size() + " records to FOLIO: " + writtenIDs + " The following should have been written but were rejected: " + failedHridsInBatch);
             }
+            writeResultsToFinalize.push(new BatchWriteResult(true, writtenIDs, failedHridsInBatch, errorMessagesInBatch, instanceHRIDsToHoldingsHRIDsWithItems));
+        } catch (IOException | URISyntaxException | ParseException e) {
+            Storage.log("Unexpected. ", e);
+            writeResultsToFinalize.push(new BatchWriteResult(false, null, null, null, null));
+        }
+    }
 
-            for (String writtenHrid : writtenIDs) {
-                // Clear any previous failed exports that have now been resolved.
-                String sql = """
-                            DELETE FROM export_failures WHERE hrid = ?;
-                            """;
-                try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                    statement.setString(1, writtenHrid);
-                    statement.execute();
+    public static synchronized boolean finalizePendingWrites(Connection connection) {
+        try {
+
+            flushQueue(connection);
+
+            // Wait for all threads to finish.
+            for (Thread t : writerThreads) {
+                t.join();
+            }
+            writerThreads.clear();
+
+            //Storage.log(" ** Finalizing writes: " + writeResultsToFinalize.size() + " finished thread results.");
+            for (var result : writeResultsToFinalize) {
+
+                // If there's a COMPLETELY failed write (for example FOLIO could not be reached), consider the entire update cycle defunct.
+                if (result.success == false)
+                    return false;
+
+                //Storage.log("   result: " + result.writtenIDs + " / " + result.failedHridsInBatch);
+                if (!result.failedHridsInBatch.isEmpty()) {
+                    // Mark failed exports for human scrutiny
+                    for (int j = 0; j < result.failedHridsInBatch.size(); ++j) {
+                        String failedHrid = result.failedHridsInBatch.get(j);
+                        String message = result.errorMessagesInBatch.get(j);
+                        String sql = """
+                                INSERT OR REPLACE INTO export_failures (hrid, short_message, time) VALUES(?, ?, ?);
+                                """;
+                        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                            statement.setString(1, failedHrid);
+                            statement.setString(2, message);
+                            statement.setString(3, ZonedDateTime.now().toString());
+                            statement.execute();
+                        }
+                        try (PreparedStatement statement = connection.prepareStatement("DELETE FROM exported_checksum WHERE hrid = ?")) {
+                            statement.setString(1, failedHrid);
+                            statement.execute();
+                        }
+                    }
                 }
 
-                // Clear any entries in the holding_creations table, if we WROTE an instance containing ITEMS (which we cannot ever do more than once per created holding)
-                if (instanceHRIDsToHoldingsHRIDsWithItems.containsKey(writtenHrid)) {
-                    List<String> holdingHRIDs = instanceHRIDsToHoldingsHRIDsWithItems.get(writtenHrid);
-                    for (String holdingHRIDwithItemsWritten : holdingHRIDs) {
+                for (String writtenHrid : result.writtenIDs) {
+                    // Clear any previous failed exports that have now been resolved.
+                    String sql = """
+                            DELETE FROM export_failures WHERE hrid = ?;
+                            """;
+                    try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                        statement.setString(1, writtenHrid);
+                        statement.execute();
+                    }
 
-                        // We know the ID of the instant we wrote, from this and the instanceHRIDsToHoldingsHRIDsWithItems we derive the holding HRIDs we wrote
-                        // and for each of those, consider it a success, only if there isnt also a listed failed HRID for an item associated with that holding.
-                        boolean writtenOk = true;
-                        for (String failedHrid : failedHridsInBatch) {
-                            if (failedHrid.startsWith(holdingHRIDwithItemsWritten))
-                                writtenOk = false;
-                        }
+                    // Clear any entries in the holding_creations table, if we WROTE an instance containing ITEMS (which we cannot ever do more than once per created holding)
+                    if (result.instanceHRIDsToHoldingsHRIDsWithItems.containsKey(writtenHrid)) {
+                        List<String> holdingHRIDs = result.instanceHRIDsToHoldingsHRIDsWithItems.get(writtenHrid);
+                        for (String holdingHRIDwithItemsWritten : holdingHRIDs) {
 
-                        if (writtenOk) {
-                            sql = """
-                                    DELETE FROM holding_creations WHERE hrid = ?;
-                                    """;
-                            try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                                statement.setString(1, holdingHRIDwithItemsWritten);
-                                statement.execute();
+                            // We know the ID of the instant we wrote, from this and the instanceHRIDsToHoldingsHRIDsWithItems we derive the holding HRIDs we wrote
+                            // and for each of those, consider it a success, only if there isnt also a listed failed HRID for an item associated with that holding.
+                            boolean writtenOk = true;
+                            for (String failedHrid : result.failedHridsInBatch) {
+                                if (failedHrid.startsWith(holdingHRIDwithItemsWritten))
+                                    writtenOk = false;
                             }
-                            Storage.log("Cleared holding hrid: " + holdingHRIDwithItemsWritten + " from the item creation queue. Items for this holding have now been created and should never be created again.");
+
+                            if (writtenOk) {
+                                sql = """
+                                        DELETE FROM holding_creations WHERE hrid = ?;
+                                        """;
+                                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                                    statement.setString(1, holdingHRIDwithItemsWritten);
+                                    statement.execute();
+                                }
+                                Storage.log("Cleared holding hrid: " + holdingHRIDwithItemsWritten + " from the item creation queue. Items for this holding have now been created and should never be created again.");
+                            }
                         }
                     }
                 }
             }
-            batch.clear();
-        } catch (IOException | URISyntaxException | ParseException e) {
-            Storage.log("Unexpected. ", e);
         }
+        catch (SQLException | InterruptedException | IOException e) {
+            Storage.log("Unexpected problem on write finalization.", e);
+            return false;
+        } finally {
+            writeResultsToFinalize.clear();
+        }
+        return true;
+    }
+
+    public static synchronized void flushQueue(Connection connection) throws IOException, InterruptedException, SQLException {
+        if (batch.isEmpty())
+            return;
+
+        HashMap<String, ArrayList<String>> instanceHRIDsToHoldingsHRIDsWithItems = clearItemsUnlessAllowed(batch, connection);
+
+        //Storage.log("BATCH FIRST:  " + Storage.mapper.writeValueAsString( batch.getFirst() ) );
+        // TEMP: DO NOT ACTUALLY WRITE ANYTHING!
+        /*if (1 == 1) {
+            List<String> writtenIDs = new ArrayList<>();
+            for (Map record : batch) {
+                writtenIDs.add( (String) ((Map)record.get("instance")).get("hrid") );
+            }
+            Storage.log("[WOULD HAVE] Written (but not live) " + batch.size() + " records to FOLIO: " + writtenIDs);
+            batch.clear();
+            return;
+        }*/
+        // REMOVE THIS
+
+        //Storage.log("Starting write thread with: " + batch.size() + " records.");
+        List<Map> localBatch = new ArrayList<>(batch.size());
+        localBatch.addAll(batch);
+
+
+        Thread t = Thread.startVirtualThread(() -> sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, localBatch));
+        writerThreads.add(t);
+        //sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, new ArrayList<>(batch));
+
+        batch.clear();
+
 
     }
 }

@@ -45,8 +45,11 @@ public class FolioTotalSync {
             FolioSync.considerForExport(id, new HashSet<>(), connection);
         }
 
-        Storage.writeState(SYNCED_TO_ID_KEY, "" + ids.getLast(), connection);
-        Storage.log("Total sync (instances) to FOLIO now at: " + ids.getLast());
+        if (FolioWriting.finalizePendingWrites(connection)) {
+            Storage.writeState(SYNCED_TO_ID_KEY, "" + ids.getLast(), connection);
+            Storage.log("Total sync (instances) to FOLIO now at: " + ids.getLast());
+        }
+
         return !ids.isEmpty();
     }
 }

@@ -50,11 +50,13 @@ public class FolioSync {
             }
 
             // Commit state for next pass
-            FolioWriting.flushQueue(connection);
-            if (modified > syncedUntil) {
-                Storage.writeState(SYNCED_UNTIL_KEY, "" + modified, connection);
+            boolean writesReceived = FolioWriting.finalizePendingWrites(connection);
+            if (writesReceived) {
+                if (modified > syncedUntil) {
+                    Storage.writeState(SYNCED_UNTIL_KEY, "" + modified, connection);
+                }
+                connection.commit();
             }
-            connection.commit();
         } catch (Exception e) {
             connection.rollback();
             Storage.log("ERROR: Failed to write complete update batch to FOLIO. Backing off 10 seconds", e);

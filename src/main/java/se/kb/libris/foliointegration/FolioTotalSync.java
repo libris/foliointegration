@@ -23,7 +23,7 @@ public class FolioTotalSync {
 
         long syncedTo = Long.parseLong(syncedToID);
 
-        List<Long> ids = new ArrayList<>(200);
+        List<Long> ids = new ArrayList<>(2000);
         // Select only Items.
         try (PreparedStatement statement = connection.prepareStatement("SELECT id FROM entities WHERE id > ? AND json_extract(entity, '$.itemOf') IS NOT NULL ORDER BY id LIMIT 200")) {
             statement.setLong(1, syncedTo);

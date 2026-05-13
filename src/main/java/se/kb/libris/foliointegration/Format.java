@@ -34,6 +34,11 @@ public class Format {
     static String instanceJsltConversion = null;
     static String holdingJsltConversion = null;
     static String itemJsltConversion = null;
+
+    static Expression instanceJSLT = null;
+    static Expression holdingJSLT = null;
+    static Expression itemsJSLT = null;
+
     public static String librisWritebackJsltConversion = null;
     static Instant lastJsltUpdate = Instant.ofEpochMilli(0);
 
@@ -322,6 +327,11 @@ public class Format {
                 }
             }
 
+            Collection<Function> functions = Collections.singleton(new ExposedDecodeFunction());
+            instanceJSLT = Parser.compileString(instanceJsltConversion, functions);
+            holdingJSLT = Parser.compileString(holdingJsltConversion, functions);
+            itemsJSLT = Parser.compileString(itemJsltConversion, functions);
+
         } catch (IOException | URISyntaxException | ParseException e) {
             Storage.log("Failed JSLT lookup.", e);
             return false;
@@ -422,15 +432,6 @@ public class Format {
     }
 
     public static Map formatForFolio(Map originalRootHolding, Connection connection) throws SQLException, IOException {
-
-        // Minimum required properties (by FOLIO): "instance" object with [ "source", "title", "instanceTypeId", "hrid" ] as determined by the json-schema.
-        // See https://github.com/folio-org/mod-inventory-update/blob/master/ramls/inventory-record-set-with-hrids.json
-
-        //Expression instanceJSLT = new Parser(new StringReader(instanceJsltConversion)).withObjectFilter(". != {} and . != []").compile(); // Leave nulls in place, but remove empty arrays/object
-        Collection<Function> functions = Collections.singleton(new ExposedDecodeFunction());
-        Expression instanceJSLT = Parser.compileString(instanceJsltConversion, functions);
-        Expression holdingJSLT = Parser.compileString(holdingJsltConversion, functions);
-        Expression itemsJSLT = Parser.compileString(itemJsltConversion, functions);
 
         Map originalMainEntity = (Map) originalRootHolding.get("itemOf");
 

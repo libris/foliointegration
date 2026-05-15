@@ -23,7 +23,7 @@ public class FolioTotalSync {
 
         long syncedTo = Long.parseLong(syncedToID);
 
-        List<Long> ids = new ArrayList<>(2000);
+        List<Long> ids = new ArrayList<>(200);
         // Select only Items.
         try (PreparedStatement statement = connection.prepareStatement("SELECT id FROM entities WHERE id > ? AND json_extract(entity, '$.itemOf') IS NOT NULL ORDER BY id LIMIT 200")) {
             statement.setLong(1, syncedTo);
@@ -48,7 +48,7 @@ public class FolioTotalSync {
 
         if (FolioWriting.finalizePendingWrites(connection)) {
             Storage.writeState(SYNCED_TO_ID_KEY, "" + ids.getLast(), connection);
-            Storage.log("Total sync (instances) to FOLIO now at: " + ids.getLast());
+            Storage.log("Total sync (instances) to FOLIO: now at internal ID: " + ids.getLast() + " This is not a count of instances.");
         }
 
         return !ids.isEmpty();

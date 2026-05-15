@@ -94,20 +94,9 @@ This should be set to a time-with-timezone string, for example like so:
 `
 FOLIO_WRITE_BATCH_SIZE
 `
-This application can, if there is a need, throttle the writes it does to FOLIO. This parameter specifies how many records
-should be sent in each batch. Do *not* set this higher than `20` as that will typically cause errors in FOLIO. 
+This parameter specifies how many records should be sent in each batch. Do *not* set this higher than `20` as that will
+typically cause errors in FOLIO. 
 
-`
-FOLIO_WRITE_CELL_SECONDS
-`
-This specifies the "cell" size to use (for throttling writes to FOLIO), in seconds. Generally set this to `1`
-
-`
-FOLIO_WRITE_BATCHES_PER_CELL
-`
-This specifies how many batches of records should be sent (max) to folio for writing in each "cell". If you effectively
-want no throttling, set this to a high value, like `100`. The number of records written to FOLIO per second can be
-calculated as `FOLIO_WRITE_BATCH_SIZE * FOLIO_WRITE_BATCHES_PER_CELL / FOLIO_WRITE_CELL_SECONDS`.
 
 `
 INSTANCE_JSLT_URL

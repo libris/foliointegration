@@ -24,7 +24,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 public class FolioWriting {
@@ -33,8 +32,6 @@ public class FolioWriting {
     private static final String folioBaseUri;
     private static final String folioTenant;
     private static final int folioWriteBatchSize;
-    private static final int folioBatchesPerCell;
-    private static final long folioCellSeconds;
 
     private static List<Map> batch = new ArrayList<>();
     private static Deque<BatchWriteResult> writeResultsToFinalize = new ArrayDeque<>();
@@ -43,11 +40,6 @@ public class FolioWriting {
     private static long folioTokenValidUntil = 0;
     private static String folioToken = null;
 
-    // Generic Cell Rate Algorithm (GCRA)
-    // Simple/effective way to do throttling.
-    private static Instant throttlingCell = Instant.now();
-    private static int throttlingCount = 0;
-
     static {
         username = System.getenv("FOLIO_USER");
         password = System.getenv("FOLIO_PASS");
@@ -55,8 +47,6 @@ public class FolioWriting {
         folioTenant = System.getenv("OKAPI_TENANT");
 
         folioWriteBatchSize = Integer.parseInt( System.getenv("FOLIO_WRITE_BATCH_SIZE") );
-        folioBatchesPerCell = Integer.parseInt( System.getenv("FOLIO_WRITE_BATCHES_PER_CELL") );
-        folioCellSeconds = Long.parseLong( System.getenv("FOLIO_WRITE_CELL_SECONDS") );
     }
 
     private static String getToken() {
@@ -301,25 +291,6 @@ public class FolioWriting {
 
     private static void sendParallell(HashMap<String, ArrayList<String>> instanceHRIDsToHoldingsHRIDsWithItems, List<Map> localBatch) {
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
-            // Throttle if necessary
-            /*while (true) {
-                Instant now = Instant.now();
-                if (now.isAfter( throttlingCell.plus(folioCellSeconds, ChronoUnit.SECONDS) ) ) {
-                    throttlingCell = now;
-                    throttlingCount = 0;
-                }
-                int cellCount = ++throttlingCount;
-                if (cellCount <= folioBatchesPerCell) {
-                    // Ok to write now!
-                    break;
-                }
-                else {
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException ie) { /* ignore * }
-                }
-            }*/
-
             String token = getToken();
 
             // Fetch barcodes from FOLIO and insert them now (at the last possible instant).

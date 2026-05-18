@@ -492,9 +492,9 @@ public class FolioWriting {
         localBatch.addAll(batch);
 
 
-        Thread t = Thread.startVirtualThread(() -> sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, localBatch));
-        writerThreads.add(t);
-        //sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, new ArrayList<>(batch));
+        //Thread t = Thread.startVirtualThread(() -> sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, localBatch));
+        //writerThreads.add(t);
+        sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, new ArrayList<>(batch));
 
         batch.clear();
 

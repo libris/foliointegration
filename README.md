@@ -124,6 +124,21 @@ This works the same way as the parameter above, but instead specifies where to l
 items back to Libris items
 
 `
+LIBRIS_LOGIN_URL="https://login-stg.libris.kb.se/oauth/token"
+`
+URL to the Libris authentication service, typically https://login-stg.libris.kb.se/oauth/token for testing (and without -stg for production)
+
+`
+LIBRIS_CLIENT_ID=""
+`
+A secret value unique for your integration. Contact Libris customer service to obtain it.
+
+`
+LIBRIS_CLIENT_SECRET=""
+`
+A secret value unique for your integration. Contact Libris customer service to obtain it.
+
+`
 FOLIO_KAFKA_CLIENT_CERT
 `
 This is the PEM certificate string to send to FOLIO, essentially the "Kafka password".

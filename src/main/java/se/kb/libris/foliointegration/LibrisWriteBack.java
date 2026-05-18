@@ -257,7 +257,7 @@ public class LibrisWriteBack {
 
             ClassicHttpResponse response = httpClient.execute(request);
             if (response.getCode() == 204) {
-                Storage.log("Wrote " + librisHoldingUri);
+                Storage.log("Wrote to " + librisHoldingUri);
             }
             else if (response.getCode() != 429){
                 Storage.log("Failed writing " + librisHoldingUri + " to LIBRIS, got: " + response.getCode() + " with message: " + EntityUtils.toString(response.getEntity()));

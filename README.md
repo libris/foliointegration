@@ -141,7 +141,8 @@ A secret value unique for your integration. Contact Libris customer service to o
 `
 FOLIO_KAFKA_CLIENT_CERT
 `
-This is the PEM certificate string to send to FOLIO, essentially the "Kafka password".
+This is the PEM certificate string to send to FOLIO, essentially the "Kafka password". This is optional and can usually be
+omitted if this integration is running inside the same cluster as FOLIO.
 
 `
 FOLIO_KAFKA_SERVERS

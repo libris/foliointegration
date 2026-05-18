@@ -6,14 +6,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.schibsted.spt.data.jslt.Expression;
 import com.schibsted.spt.data.jslt.Parser;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.entity.UrlEncodedFormEntity;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
-import org.apache.hc.core5.http.ClassicHttpResponse;
-import org.apache.hc.core5.http.Header;
-import org.apache.hc.core5.http.ParseException;
-import org.apache.hc.core5.http.ProtocolException;
+import org.apache.hc.core5.http.*;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.hc.core5.http.message.BasicNameValuePair;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -34,25 +35,6 @@ import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CON
 import static org.apache.kafka.clients.consumer.ConsumerConfig.*;
 
 public class LibrisWriteBack {
-
-    /*static String temporaryJslt = """
-            let root = (.) // root is the folio holding record
-
-            [
-                 // In the holding record, "items" (the FOLIO items) have been artificially added.
-                 // The "librisLibraryUri"-property is also artificially added.
-                 // Wherever a GUID is found (if not under {"id": ...}) the GUID will have been replaced
-                 // by whatever we've previously mapped that GUID to, if anything (for transforming in the other direction).
-                 // The result of this transform must be a new hasComponent list for the Libris holding record:
-                 for (.items) {
-                     "heldBy": {"@id": $root.librisLibraryUri},
-                     "hasNote": {"@type": "Note", "label": $root.permanentLocationId},
-                     "shelfMark" : {"@type": "ShelfMark", "label": .barcode }
-                 }
-            ]
-            
-            
-            """;*/
 
     static String LIBRIS_BASE_URL = System.getenv("LIBRIS_BASE_URL");
 
@@ -172,6 +154,7 @@ public class LibrisWriteBack {
             request.setConfig(config);
 
             request.setHeader("Accept", "application/ld+json");
+            request.setHeader("User-Agent", "FOLIO integration");
             ClassicHttpResponse response = httpClient.execute(request);
 
             /*for (Header h : response.getHeaders()) {
@@ -220,6 +203,39 @@ public class LibrisWriteBack {
                 }
             }
             l.addAll(toBeAdded);
+        }
+    }
+
+    public static String getAuthToken() throws IOException, ParseException {
+        final String loginUrl = System.getenv("LIBRIS_LOGIN_URL");
+        final String clientId = System.getenv("LIBRIS_CLIENT_ID");
+        final String clientSecret = System.getenv("LIBRIS_CLIENT_SECRET");
+
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+
+            HttpPost request = new HttpPost(loginUrl);
+            RequestConfig config = RequestConfig.custom()
+                    .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+            request.setConfig(config);
+
+            request.setHeader("Accept", "application/json");
+            request.setHeader("User-Agent", "FOLIO integration");
+
+            //request.setEntity(new StringEntity("client_id=" + clientId + "&client_secret=" + clientSecret + "&grant_type=client_credentials"));
+            final List<NameValuePair> params = new ArrayList<>();
+            params.add(new BasicNameValuePair("client_id", clientId));
+            params.add(new BasicNameValuePair("client_secret", clientSecret));
+            params.add(new BasicNameValuePair("grant_type", "client_credentials"));
+            request.setEntity(new UrlEncodedFormEntity(params));
+
+            ClassicHttpResponse response = httpClient.execute(request);
+            String responseText = EntityUtils.toString(response.getEntity());
+
+            Map responseMap = Storage.mapper.readValue(responseText, Map.class);
+            String token = (String) responseMap.get("access_token");
+
+            Storage.log(" ****** GOT LIBRIS AUTH TOKEN: " + token);
+            return token;
         }
     }
 }

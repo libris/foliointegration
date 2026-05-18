@@ -1,12 +1,11 @@
 package se.kb.libris.foliointegration;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.schibsted.spt.data.jslt.Expression;
 import com.schibsted.spt.data.jslt.Parser;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.classic.methods.HttpPut;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.entity.UrlEncodedFormEntity;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -26,7 +25,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.*;
 
@@ -38,44 +36,49 @@ public class LibrisWriteBack {
 
     static String LIBRIS_BASE_URL = System.getenv("LIBRIS_BASE_URL");
 
-    public static boolean run() {
+    final static Properties props = new Properties() {{
+        String sslCert = System.getenv("FOLIO_KAFKA_CLIENT_CERT");
+        String bootstrapServers = System.getenv("FOLIO_KAFKA_SERVERS");
 
-        final Properties props = new Properties() {{
-            String sslCert = System.getenv("FOLIO_KAFKA_CLIENT_CERT");
-                String bootstrapServers = System.getenv("FOLIO_KAFKA_SERVERS");
+        put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 
-            put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getCanonicalName());
+        put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getCanonicalName());
+        put(GROUP_ID_CONFIG, "libris-integration"); // Must be a "unique" name. If shared with something in folio, we would "steal" events that they would miss.
+        put(AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-            put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getCanonicalName());
-            put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getCanonicalName());
-            put(GROUP_ID_CONFIG, "libris-integration"); // Must be a "unique" name. If shared with something in folio, we would "steal" events that they would miss.
-            put(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        put(SECURITY_PROTOCOL_CONFIG, "SSL");
+        put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, sslCert);
+        put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PEM");
+    }};
 
-            put(SECURITY_PROTOCOL_CONFIG, "SSL");
-            put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, sslCert);
-            put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PEM");
-        }};
-
+    public static boolean run() throws IOException, ParseException {
         final String topic = "folio.ALL.inventory.item";
 
+        boolean changed = false;
         try (final Consumer<String, String> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Arrays.asList(topic));
 
             // TODO: Consumer.seek(long) // to our last handled timeStamp
 
-            while (true) {
+            String librisAuthToken = getAuthToken();
+            if (librisAuthToken != null) {
+
+                //while (true) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
                 for (ConsumerRecord<String, String> record : records) {
                     String key = record.key();
                     String value = record.value();
-                    Storage.log(String.format("Kafka event %s: key = %-10s value = %s", topic, key, value));
-                    handleEvent(value);
+                    //Storage.log(String.format("Kafka event %s: key = %-10s value = %s", topic, key, value));
+                    changed |= handleEvent(value, librisAuthToken);
                 }
+                //}
             }
         }
+        return changed;
     }
 
-    private static void handleEvent(String event) {
+    private static boolean handleEvent(String event, String librisAuthToken) {
         try {
             Map eventMap = Storage.mapper.readValue(event, Map.class);
             Long eventTimeStamp = (Long) eventMap.get("eventTs");
@@ -137,11 +140,14 @@ public class LibrisWriteBack {
             Map mainEntity = (Map) graphList.get(1);
             mainEntity.put("hasComponent", newLibrisComponentList);
             librisHoldingMap.remove("@context");
-            Storage.log("  ** Ready to write to libris?: " + Storage.mapper.writeValueAsString(librisHoldingMap));
+            //Storage.log("  ** Ready to write to libris?: " + Storage.mapper.writeValueAsString(librisHoldingMap));
+
+            return writeLibrisHolding(librisHoldingUri, librisHoldingMap, librisHoldingRecordAndEtag[1], librisAuthToken, sigel);
 
         } catch (Exception e) {
             Storage.log("Failed handling KAFKA event. The value received from KAFKA was this:\n" + event, e);
         }
+        return false;
     }
 
     // Returns response (0) and ETAG (1) (or throws)
@@ -229,13 +235,41 @@ public class LibrisWriteBack {
             request.setEntity(new UrlEncodedFormEntity(params));
 
             ClassicHttpResponse response = httpClient.execute(request);
-            String responseText = EntityUtils.toString(response.getEntity());
+            if (response.getCode() == 200) {
+                String responseText = EntityUtils.toString(response.getEntity());
+                Map responseMap = Storage.mapper.readValue(responseText, Map.class);
+                String token = (String) responseMap.get("access_token");
+                Storage.log(" ****** GOT LIBRIS AUTH TOKEN: " + token);
+                return token;
+            } else {
+                Storage.log("Failed retrieving authentication token from " + loginUrl + " got: " + response.getCode() + " with message: " + EntityUtils.toString(response.getEntity()));
+                return null;
+            }
+        }
+    }
 
-            Map responseMap = Storage.mapper.readValue(responseText, Map.class);
-            String token = (String) responseMap.get("access_token");
+    public static boolean writeLibrisHolding(String librisHoldingUri, Map librisHolding, String ETag, String authToken, String sigel) throws IOException, ParseException {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
-            Storage.log(" ****** GOT LIBRIS AUTH TOKEN: " + token);
-            return token;
+            HttpPut request = new HttpPut(librisHoldingUri);
+            RequestConfig config = RequestConfig.custom()
+                    .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+            request.setConfig(config);
+
+            request.setHeader("Content-Type", "application/ld+json");
+            request.setHeader("If-Match", ETag);
+            request.setHeader("User-Agent", "FOLIO integration");
+            request.setHeader("XL-Active-Sigel", sigel);
+
+            request.setEntity(new StringEntity(Storage.mapper.writeValueAsString(librisHolding)));
+
+            ClassicHttpResponse response = httpClient.execute(request);
+            if (response.getCode() == 204)
+                return true;
+            else {
+                Storage.log("Failed writing " + librisHoldingUri + " to LIBRIS, got: " + response.getCode() + " with message: " + EntityUtils.toString(response.getEntity()));
+            }
+            return false;
         }
     }
 }

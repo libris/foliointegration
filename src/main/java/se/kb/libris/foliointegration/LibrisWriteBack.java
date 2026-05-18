@@ -51,28 +51,26 @@ public class LibrisWriteBack {
         put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, sslCert);
         put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PEM");
     }};
+    final static Consumer<String, String> consumer = new KafkaConsumer<>(props);
+    final static String topic = "folio.ALL.inventory.item";
+    static {
+        consumer.subscribe(Arrays.asList(topic));
+        // TODO: Consumer.seek(long) // to our last handled timeStamp. No? Maybe no need.
+    }
 
     public static boolean run() throws IOException, ParseException {
-        final String topic = "folio.ALL.inventory.item";
-
         boolean changed = false;
-        try (final Consumer<String, String> consumer = new KafkaConsumer<>(props)) {
-            consumer.subscribe(Arrays.asList(topic));
-
-            // TODO: Consumer.seek(long) // to our last handled timeStamp. No? Maybe no need.
-
-            String librisAuthToken = getAuthToken();
-            if (librisAuthToken != null) {
-
-                ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
-                for (ConsumerRecord<String, String> record : records) {
-                    String key = record.key();
-                    String value = record.value();
-                    //Storage.log(String.format("Kafka event %s: key = %-10s value = %s", topic, key, value));
-                    changed |= handleEvent(value, librisAuthToken);
-                }
+        String librisAuthToken = getAuthToken();
+        if (librisAuthToken != null) {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+            for (ConsumerRecord<String, String> record : records) {
+                String key = record.key();
+                String value = record.value();
+                //Storage.log(String.format("Kafka event %s: key = %-10s value = %s", topic, key, value));
+                changed |= handleEvent(value, librisAuthToken);
             }
         }
+
         return changed;
     }
 

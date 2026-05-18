@@ -59,12 +59,11 @@ public class LibrisWriteBack {
         try (final Consumer<String, String> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Arrays.asList(topic));
 
-            // TODO: Consumer.seek(long) // to our last handled timeStamp
+            // TODO: Consumer.seek(long) // to our last handled timeStamp. No? Maybe no need.
 
             String librisAuthToken = getAuthToken();
             if (librisAuthToken != null) {
 
-                //while (true) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
                 for (ConsumerRecord<String, String> record : records) {
                     String key = record.key();
@@ -72,7 +71,6 @@ public class LibrisWriteBack {
                     //Storage.log(String.format("Kafka event %s: key = %-10s value = %s", topic, key, value));
                     changed |= handleEvent(value, librisAuthToken);
                 }
-                //}
             }
         }
         return changed;
@@ -111,38 +109,38 @@ public class LibrisWriteBack {
             String libraryUri = new URI("https://libris.kb.se/library/"+sigel).toString();
             holdingMap.put("librisLibraryUri", libraryUri);
 
-            // Having a libris bibliographic URI + Library URI means we can identify the libris holding record in question.
-            URI findHoldUri = new URI(LIBRIS_BASE_URL);
-            findHoldUri = findHoldUri.resolve("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
-            String[] librisHoldingUriListAndEtag = doLibrisGet(findHoldUri);
-            List librisHoldingUriList = Storage.mapper.readValue(librisHoldingUriListAndEtag[0], List.class);
-            if (librisHoldingUriList.isEmpty())
-                throw new RuntimeException("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri);
-            String librisHoldingUri = (String) librisHoldingUriList.get(0);
-            String[] librisHoldingRecordAndEtag = doLibrisGet( new URI(librisHoldingUri) );
-            Map librisHoldingMap = Storage.mapper.readValue(librisHoldingRecordAndEtag[0], Map.class);
-            //Storage.log("Libris holding: " + librisHoldingRecordAndEtag[0] + "\nETAG: " + librisHoldingRecordAndEtag[1]);
 
-            // Apply the JSLT transform to our folio holding and items, to get a libris component-list
-            //Storage.log(" **** ready for transform for: " + holdingId + ":\n" + Storage.mapper.writeValueAsString(holdingMap));
-            Expression writebackJSLT = Parser.compileString(Format.librisWritebackJsltConversion, new ArrayList<>()); // no extra functions for now.
-            JsonNode originalJsonNode = Storage.mapper.valueToTree(holdingMap);
-            JsonNode transformedJsonNode = writebackJSLT.apply(originalJsonNode);
-            List newLibrisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
-            //Storage.log(" **** Transformed component list for : " + holdingId + ":\n" + Storage.mapper.writeValueAsString(newLibrisComponentList));
+            int writeResultCode = 0;
+            do {
+                // Having a libris bibliographic URI + Library URI means we can identify the libris holding record in question.
+                URI findHoldUri = new URI(LIBRIS_BASE_URL);
+                findHoldUri = findHoldUri.resolve("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
+                String[] librisHoldingUriListAndEtag = doLibrisGet(findHoldUri);
+                List librisHoldingUriList = Storage.mapper.readValue(librisHoldingUriListAndEtag[0], List.class);
+                if (librisHoldingUriList.isEmpty())
+                    throw new RuntimeException("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri);
+                String librisHoldingUri = (String) librisHoldingUriList.get(0);
+                String[] librisHoldingRecordAndEtag = doLibrisGet(new URI(librisHoldingUri));
+                Map librisHoldingMap = Storage.mapper.readValue(librisHoldingRecordAndEtag[0], Map.class);
 
-            // Replace the old hasComponent list with the new one.
+                // Apply the JSLT transform to our folio holding and items, to get a libris component-list
+                Expression writebackJSLT = Parser.compileString(Format.librisWritebackJsltConversion, new ArrayList<>()); // no extra functions for now.
+                JsonNode originalJsonNode = Storage.mapper.valueToTree(holdingMap);
+                JsonNode transformedJsonNode = writebackJSLT.apply(originalJsonNode);
+                List newLibrisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
 
-            List graphList = (List) librisHoldingMap.get("@graph");
-            while (graphList.size() > 2) { // we don't want "lens cards" and such crap, just the plain data for this record.
-                graphList.removeLast();
-            }
-            Map mainEntity = (Map) graphList.get(1);
-            mainEntity.put("hasComponent", newLibrisComponentList);
-            librisHoldingMap.remove("@context");
-            //Storage.log("  ** Ready to write to libris?: " + Storage.mapper.writeValueAsString(librisHoldingMap));
+                // Replace the old hasComponent list with the new one.
+                List graphList = (List) librisHoldingMap.get("@graph");
+                while (graphList.size() > 2) { // we don't want "lens cards" and such crap, just the plain data for this record.
+                    graphList.removeLast();
+                }
+                Map mainEntity = (Map) graphList.get(1);
+                mainEntity.put("hasComponent", newLibrisComponentList);
+                librisHoldingMap.remove("@context");
+                writeResultCode = writeLibrisHolding(librisHoldingUri, librisHoldingMap, librisHoldingRecordAndEtag[1], librisAuthToken, sigel);
+            } while (writeResultCode == 429); // If we get a 429 (concurrent modification) try again.
 
-            return writeLibrisHolding(librisHoldingUri, librisHoldingMap, librisHoldingRecordAndEtag[1], librisAuthToken, sigel);
+            return true;
 
         } catch (Exception e) {
             Storage.log("Failed handling KAFKA event. The value received from KAFKA was this:\n" + event, e);
@@ -163,15 +161,10 @@ public class LibrisWriteBack {
             request.setHeader("User-Agent", "FOLIO integration");
             ClassicHttpResponse response = httpClient.execute(request);
 
-            /*for (Header h : response.getHeaders()) {
-                Storage.log("*** HEADER ?? : " +h);
-            }*/
             Header etagHeader =  response.getHeader("ETag");
             String etag = null;
             if (etagHeader != null)
                 etag = etagHeader.getValue();
-
-            // Libris ETags are weak (start with "W/"), this might have to be stripped out before sending back.
 
             String responseText = EntityUtils.toString(response.getEntity());
             String[] tuple = {responseText, etag};
@@ -227,7 +220,6 @@ public class LibrisWriteBack {
             request.setHeader("Accept", "application/json");
             request.setHeader("User-Agent", "FOLIO integration");
 
-            //request.setEntity(new StringEntity("client_id=" + clientId + "&client_secret=" + clientSecret + "&grant_type=client_credentials"));
             final List<NameValuePair> params = new ArrayList<>();
             params.add(new BasicNameValuePair("client_id", clientId));
             params.add(new BasicNameValuePair("client_secret", clientSecret));
@@ -239,7 +231,6 @@ public class LibrisWriteBack {
                 String responseText = EntityUtils.toString(response.getEntity());
                 Map responseMap = Storage.mapper.readValue(responseText, Map.class);
                 String token = (String) responseMap.get("access_token");
-                Storage.log(" ****** GOT LIBRIS AUTH TOKEN: " + token);
                 return token;
             } else {
                 Storage.log("Failed retrieving authentication token from " + loginUrl + " got: " + response.getCode() + " with message: " + EntityUtils.toString(response.getEntity()));
@@ -248,7 +239,7 @@ public class LibrisWriteBack {
         }
     }
 
-    public static boolean writeLibrisHolding(String librisHoldingUri, Map librisHolding, String ETag, String authToken, String sigel) throws IOException, ParseException {
+    public static int writeLibrisHolding(String librisHoldingUri, Map librisHolding, String ETag, String authToken, String sigel) throws IOException, ParseException {
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
             HttpPut request = new HttpPut(librisHoldingUri);
@@ -260,16 +251,18 @@ public class LibrisWriteBack {
             request.setHeader("If-Match", ETag);
             request.setHeader("User-Agent", "FOLIO integration");
             request.setHeader("XL-Active-Sigel", sigel);
+            request.setHeader("Authorization", authToken);
 
             request.setEntity(new StringEntity(Storage.mapper.writeValueAsString(librisHolding)));
 
             ClassicHttpResponse response = httpClient.execute(request);
-            if (response.getCode() == 204)
-                return true;
-            else {
+            if (response.getCode() == 204) {
+                Storage.log("Wrote " + librisHoldingUri);
+            }
+            else if (response.getCode() != 429){
                 Storage.log("Failed writing " + librisHoldingUri + " to LIBRIS, got: " + response.getCode() + " with message: " + EntityUtils.toString(response.getEntity()));
             }
-            return false;
+            return response.getCode();
         }
     }
 }

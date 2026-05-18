@@ -110,6 +110,7 @@ public class Server {
 
         // TEMP
         //LibrisWriteBack.run();
+        //LibrisWriteBack.getAuthToken();
         //System.exit(0);
 
         // The main loop
@@ -159,6 +160,7 @@ public class Server {
                         runAgainImmediately |= EmmSync.run();
                         runAgainImmediately |= FolioSync.run();
                         runAgainImmediately |= FolioTotalSync.run();
+                        runAgainImmediately |= LibrisWriteBack.run();
                         if (!runAgainImmediately) {
                             Thread.sleep(100);
                         }

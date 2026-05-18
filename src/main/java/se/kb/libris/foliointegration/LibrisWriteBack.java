@@ -47,9 +47,11 @@ public class LibrisWriteBack {
         put(GROUP_ID_CONFIG, "libris-integration"); // Must be a "unique" name. If shared with something in folio, we would "steal" events that they would miss.
         put(AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        put(SECURITY_PROTOCOL_CONFIG, "SSL");
-        put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, sslCert);
-        put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PEM");
+        if (sslCert != null) {
+            put(SECURITY_PROTOCOL_CONFIG, "SSL");
+            put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, sslCert);
+            put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PEM");
+        }
     }};
     final static Consumer<String, String> consumer = new KafkaConsumer<>(props);
     final static String topic = "folio.ALL.inventory.item";

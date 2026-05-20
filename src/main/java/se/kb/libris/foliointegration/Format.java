@@ -445,7 +445,9 @@ public class Format {
         List<Map> folioHoldings = new ArrayList<>(allLibrisHoldings.size());
 
         for (Map item : allLibrisHoldings) {
-            reverseItemOfList.add(item);
+            Map originalItem = new HashMap();
+            originalItem.putAll(item);
+            reverseItemOfList.add(originalItem);
 
             // embed the instance, to make instance-info available during JSLT-transform.
             item.put("itemOf", originalMainEntity);

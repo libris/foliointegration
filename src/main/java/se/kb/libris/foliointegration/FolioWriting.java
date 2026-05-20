@@ -324,6 +324,8 @@ public class FolioWriting {
             List<String> errorMessagesInBatch = new ArrayList<>();
 
             if (response.getCode() == 207) { // "Multi-status", mixed response. We need to figure out which records went bad
+                Storage.log("Sent the following request body to FOLIO, which resulted in a 207 response code (partial rejection): " + body);
+
                 // Need to parse error message per record tried: /errors/N/entity/hrid
                 // If folio changes the way it reports errors, this will break down in a hurry.
                 // If that ever happens, the easy temporary fix, is to ignore this code, and just set

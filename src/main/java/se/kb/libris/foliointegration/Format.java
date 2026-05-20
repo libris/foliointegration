@@ -435,16 +435,18 @@ public class Format {
 
         Map originalMainEntity = (Map) originalRootHolding.get("itemOf");
 
-        JsonNode instanceJsonNodeOriginal = Storage.mapper.valueToTree(originalMainEntity);
-        JsonNode instanceJsonNodeTransformed = instanceJSLT.apply(instanceJsonNodeOriginal);
-        Map jsltModifiedInstance = Storage.mapper.treeToValue(instanceJsonNodeTransformed, Map.class);
-        jsltFolioLookups(jsltModifiedInstance);
-
+        // Add @reverse.itemOf to a copy of the original mainEntity (we don't want this going in circles)
+        Map mainEntityWithReverse = new HashMap();
+        mainEntityWithReverse.putAll(originalMainEntity);
+        List reverseItemOfList = new ArrayList();
+        mainEntityWithReverse.put("@reverse", reverseItemOfList);
 
         List<Map> allLibrisHoldings = getHoldings( (String) originalMainEntity.get("@id"), connection);
         List<Map> folioHoldings = new ArrayList<>(allLibrisHoldings.size());
 
         for (Map item : allLibrisHoldings) {
+            reverseItemOfList.add(item);
+
             // embed the instance, to make instance-info available during JSLT-transform.
             item.put("itemOf", originalMainEntity);
 
@@ -463,6 +465,12 @@ public class Format {
             folioHoldings.add( folioHolding );
         }
         jsltFolioLookups(folioHoldings);
+
+        //Storage.log("To convert instance, should contain reverse itemOfs:\n" + Storage.mapper.writeValueAsString(mainEntityWithReverse));
+        JsonNode instanceJsonNodeOriginal = Storage.mapper.valueToTree(mainEntityWithReverse);
+        JsonNode instanceJsonNodeTransformed = instanceJSLT.apply(instanceJsonNodeOriginal);
+        Map jsltModifiedInstance = Storage.mapper.treeToValue(instanceJsonNodeTransformed, Map.class);
+        jsltFolioLookups(jsltModifiedInstance);
 
         Map converted = new HashMap();
         converted.put("instance", jsltModifiedInstance);

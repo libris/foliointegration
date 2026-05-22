@@ -450,7 +450,10 @@ public class Format {
             reverseItemOfList.add(originalItem);
 
             // embed the instance, to make instance-info available during JSLT-transform.
-            item.put("itemOf", originalMainEntity);
+            //item.put("itemOf", originalMainEntity);
+            Records.embellishWithLocalData(item, new HashSet<>(), connection);
+
+            //Storage.log(" CONVERTING ITEM, WITH INPUT LIKE SO:\n" + Storage.mapper.writeValueAsString(item) + "\n-----");
 
             JsonNode holdingsJsonNodeOriginal = Storage.mapper.valueToTree(item);
             JsonNode holdingsJsonNodeTransformed = holdingJSLT.apply(holdingsJsonNodeOriginal);

@@ -29,6 +29,7 @@ public class IntegrationServlet extends HttpServlet {
                               <hr/>
                               The full log must be obtained from the machine/pod running the server. The last bit of the log can be downloaded here: 
                               <form action='/taillog' method='post'><input type='submit' value='Tail log'></form>
+                              <br/><br/>
                               </div>
                             </center>
                           </body>
@@ -144,6 +145,12 @@ public class IntegrationServlet extends HttpServlet {
                         Thread.sleep(10);
                     } catch (InterruptedException e) {/* ignore */}
                 }
+                response.sendRedirect("/");
+                break;
+            }
+            case "/shutdown": {
+                Server.requestShutdown();
+                Storage.log("Controlled shutdown manually requested.");
                 response.sendRedirect("/");
                 break;
             }
@@ -361,7 +368,24 @@ public class IntegrationServlet extends HttpServlet {
                         </form>
                         """;
                 os.write(s.getBytes(StandardCharsets.UTF_8));
+                s = " <br/><br/>";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
             }
+        }
+
+        // Controlled exit
+        {
+            String s = "<hr><br/>Controlled shutdown (queued for when the system is next at rest).<br/><br/>";
+            os.write(s.getBytes(StandardCharsets.UTF_8));
+
+            s = """
+                    <form action="/shutdown" method="post">
+                        <input type="submit" value="Shut down">
+                    </form>
+                    """.stripIndent();
+            os.write(s.getBytes(StandardCharsets.UTF_8));
+            s = " <br/><br/>";
+            os.write(s.getBytes(StandardCharsets.UTF_8));
         }
 
         os.write(outro.getBytes(StandardCharsets.UTF_8));

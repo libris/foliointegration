@@ -50,6 +50,7 @@ public class Server {
     private static boolean requestedClearChecksums = false;
     private static boolean requestedTotalFolioSync = false;
     private static boolean requestedCancelTotalFolioSync = false;
+    private static boolean keepRunning = true;
     public static synchronized void requestChangedEmmTime(long newTime) {
         requestedNewEmmTime = newTime;
     }
@@ -70,6 +71,9 @@ public class Server {
     }
     public static synchronized void requestCancelTotalFolioSync() {
         requestedCancelTotalFolioSync = true;
+    }
+    public static synchronized void requestShutdown() {
+        keepRunning = false;
     }
     public static synchronized boolean getRequestedClearChecksums() {
         return requestedClearChecksums;
@@ -107,14 +111,9 @@ public class Server {
         }
 
         server.start();
-
-        // TEMP
-        //LibrisWriteBack.run();
-        //LibrisWriteBack.getAuthToken();
-        //System.exit(0);
-
+        
         // The main loop
-        while (true) {
+        while (keepRunning) {
             try {
                 Connection connection = Storage.getConnection();
                 Storage.APPLICATION_STATE state = Storage.getApplicationState(connection);
@@ -176,6 +175,8 @@ public class Server {
             }
         }
 
-        //server.join(); // unreachable
+        server.stop();
+        server.join();
+        Storage.log("Shutting down.");
     }
 }

@@ -184,6 +184,14 @@ public class Format {
                     false
             );
 
+            populateStandardLookup(
+                    "instance-date-types?limit=5000&query=cql.allRecords=1",
+                    "instanceDateTypes",
+                    "__FOLIO_LOOKUP_INSTANCE_DATE_TYPE_GUID",
+                    "name",
+                    false
+            );
+
         } catch (IOException ioe) {
             Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.", ioe);
             System.exit(1);

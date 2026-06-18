@@ -192,6 +192,14 @@ public class Format {
                     false
             );
 
+            populateStandardLookup(
+                    "contributor-types?query=cql.allRecords=1&limit=5000",
+                    "contributorTypes",
+                    "__FOLIO_LOOKUP_CONTRIBUTOR_TYPE_GUID",
+                    "name",
+                    false
+            );
+
         } catch (IOException ioe) {
             Storage.log("Failed startup lookup of FOLIO GUIDs or other external resources.", ioe);
             System.exit(1);

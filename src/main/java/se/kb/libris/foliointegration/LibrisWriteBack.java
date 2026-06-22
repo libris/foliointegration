@@ -143,12 +143,21 @@ public class LibrisWriteBack {
                     // The sequence must be replaced by a link in libris.
                     // If there was no sequence number, one must be taken from the sequence.
 
+                    Storage.log(" ** HANDLING AN INCOMING HOLD: " + Storage.mapper.writeValueAsString(m));
+
                     if (m.containsKey("shelfMark")) {
                         Object sm = m.get("shelfMark");
                         if (sm instanceof List l) {
                             sm = l.get(0);
                         }
-                        String shelfMarkString = ((String) sm).trim();
+                        Map shelfMarkMap = ((Map) sm);
+                        Object label = shelfMarkMap.get("label");
+                        if (label instanceof List l) {
+                            label = l.get(0);
+                        }
+                        String shelfMarkString = ( (String) label ).trim();
+
+                        Storage.log("    HANDLING AN INCOMING SHELFMARK: " + shelfMarkString);
 
                         int spaceAt = shelfMarkString.indexOf(" ");
                         String sequenceString;
@@ -161,12 +170,22 @@ public class LibrisWriteBack {
                             controlNumberString = null;
                         }
 
+                        Storage.log("    parsed as : " + sequenceString + " / " + controlNumberString);
+
                         String sequenceUri = lookupShelfMarkSequence(sequenceString);
-                        m.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
-                        if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
-                            controlNumberString = reserveShelfControlNumber(sequenceUri);
+
+                        Storage.log("    looked up as : " + sequenceString + " = " + sequenceUri);
+
+                        if (sequenceUri != null) { // Link a found shelfMark sequence.
+                            m.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
+                            if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
+                                controlNumberString = reserveShelfControlNumber(sequenceUri);
+                                m.put("shelfControlNumber", controlNumberString);
+                            }
                         }
-                        m.put("shelfControlNumber", controlNumberString);
+                        else {
+                            Storage.log("Found no shelf mark sequence for: " + sequenceString + " in libris. Leaving shelf mark as is.");
+                        }
                     }
 
                 }
@@ -196,12 +215,12 @@ public class LibrisWriteBack {
     }
 
     private static String reserveShelfControlNumber(String sequenceUri) {
-        return null;
+        return "100 TEST!";
     }
 
     private static String lookupShelfMarkSequence(String name) throws URISyntaxException, IOException, ProtocolException {
         URI findUri = new URI(LIBRIS_BASE_URL);
-        String[] result = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence " + name));
+        String[] result = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence%20" + name));
         if (result[2].equals("200")) {
             Map searchResultMap = Storage.mapper.readValue(result[0], Map.class);
             if (searchResultMap.containsKey("items")) {
@@ -223,7 +242,8 @@ public class LibrisWriteBack {
                 }
             }
         }
-        throw new RuntimeException("Failed ShelfMarkSequence lookup on " + name);
+        //throw new RuntimeException("Failed ShelfMarkSequence lookup on " + name);
+        return null;
     }
 
     // Returns response (0) and ETAG (1) (or throws)

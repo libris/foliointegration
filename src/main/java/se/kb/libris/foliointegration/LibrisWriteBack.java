@@ -132,18 +132,16 @@ public class LibrisWriteBack {
             for (Object o : newLibrisComponentList) {
                 if (o instanceof Map m) {
 
-                    // .shelfMark = Sv2023Q | Sv2023Q 346346
+                    // This stuff arrives as:
+                    // .shelfMark = Sv2023Q [OR] Sv2023Q 346346
 
-                    // slå upp Sv2023Q och länka
-                    // sätt direkt på exemplar:
-                    // shelfControlNumber	"1815"
-                    // shelfMark            [0] {@id : länktillSC2023...}
+                    // The end result should be something like:
+                    // .shelfControlNumber	"1815"
+                    // .shelfMark            [0] {@id : link-to-Sv2023Q...}
 
                     // If an item has a multi-word shelfMark, the first is the "suite" (sequence) the rest is the number from that sequence.
                     // The sequence must be replaced by a link in libris.
                     // If there was no sequence number, one must be taken from the sequence.
-
-                    Storage.log(" ** HANDLING AN INCOMING HOLD: " + Storage.mapper.writeValueAsString(m));
 
                     if (m.containsKey("shelfMark")) {
                         Object sm = m.get("shelfMark");
@@ -157,8 +155,6 @@ public class LibrisWriteBack {
                         }
                         String shelfMarkString = ( (String) label ).trim();
 
-                        Storage.log("    HANDLING AN INCOMING SHELFMARK: " + shelfMarkString);
-
                         int spaceAt = shelfMarkString.indexOf(" ");
                         String sequenceString;
                         String controlNumberString;
@@ -170,17 +166,19 @@ public class LibrisWriteBack {
                             controlNumberString = null;
                         }
 
-                        Storage.log("    parsed as : " + sequenceString + " / " + controlNumberString);
-
+                        //Storage.log("    parsed as : " + sequenceString + " / " + controlNumberString);
                         String sequenceUri = lookupShelfMarkSequence(sequenceString);
-
-                        Storage.log("    looked up as : " + sequenceString + " = " + sequenceUri);
+                        //Storage.log("    looked up as : " + sequenceString + " = " + sequenceUri);
 
                         if (sequenceUri != null) { // Link a found shelfMark sequence.
                             m.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
                             if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
-                                controlNumberString = reserveShelfControlNumber(sequenceUri);
-                                m.put("shelfControlNumber", controlNumberString);
+                                controlNumberString = reserveShelfControlNumber(sequenceUri, librisAuthToken, sigel);
+                                if (controlNumberString != null) {
+                                    m.put("shelfControlNumber", controlNumberString);
+                                } else {
+                                    Storage.log("Was unable to reserve a sequence number from: " + sequenceString + " / " + sequenceUri);
+                                }
                             }
                         }
                         else {
@@ -203,7 +201,7 @@ public class LibrisWriteBack {
             // Write to LIBRIS
             int writeResultCode = 0;
             do {
-                writeResultCode = writeLibrisHolding(librisHoldingUri, librisHoldingMap, librisHoldingRecordAndEtag[1], librisAuthToken, sigel);
+                writeResultCode = writeLibrisRecord(librisHoldingUri, librisHoldingMap, librisHoldingRecordAndEtag[1], librisAuthToken, sigel);
             } while (writeResultCode == 429); // If we get a 429 (concurrent modification) try again.
 
             return true;
@@ -214,8 +212,37 @@ public class LibrisWriteBack {
         return false;
     }
 
-    private static String reserveShelfControlNumber(String sequenceUri) {
-        return "100 TEST!";
+    private static String reserveShelfControlNumber(String sequenceUri, String librisAuthToken, String sigel) throws URISyntaxException, IOException, ProtocolException {
+        String[] librisShelfMarkRecordAndEtag = doLibrisGet( new URI(sequenceUri) );
+        if (librisShelfMarkRecordAndEtag[2].equals("200")) {
+            String etag = librisShelfMarkRecordAndEtag[1];
+            String data = librisShelfMarkRecordAndEtag[0];
+            Map dataMap = Storage.mapper.readValue(data, Map.class);
+            List graphList = (List) dataMap.get("@graph");
+            Map mainEntity = (Map) graphList.get(1);
+            Integer nextNumber = (Integer) mainEntity.get("nextShelfControlNumber");
+
+            mainEntity.put("nextShelfControlNumber", nextNumber+1);
+
+            // Cut out the stuff we don't want to write back:
+            dataMap.remove("@context");
+            while (graphList.size() > 2) {
+                graphList.removeLast();
+            }
+
+            //String newRecordData = Storage.mapper.writeValueAsString(dataMap);
+            //Storage.log(" ** WAS NOW ABOUT TO WRITEBACK: " + newRecordData);
+
+            // Write to LIBRIS
+            int writeResultCode = 0;
+            do {
+                writeResultCode = writeLibrisRecord(sequenceUri, dataMap, etag, librisAuthToken, sigel);
+            } while (writeResultCode == 429); // If we get a 429 (concurrent modification) try again.
+
+            // IF WRITE OK:
+            return ""+nextNumber;
+        }
+        return null;
     }
 
     private static String lookupShelfMarkSequence(String name) throws URISyntaxException, IOException, ProtocolException {
@@ -303,75 +330,6 @@ public class LibrisWriteBack {
         }
     }
 
-    /*
-    private static String getUriFromLibris(String lookupCode, String key) throws IOException, URISyntaxException, ProtocolException {
-
-
-        if (lookupCode.equals("__LIBRIS_LOOKUP_SHELFMARK")) {
-            // Do type:(ShelfMarkSequence) Sv2023Q
-            // type:(ShelfMarkSequence) + key
-
-            // Find single/best, return.
-
-            URI findUri = new URI(LIBRIS_BASE_URL);
-            String[] result = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence " + key));
-            if (result[2].equals("200")) {
-                System.err.println("** RESULT OF SEARCHING FOR " + key + " :\n" + result[0]);
-            }
-
-
-            //findHoldUri = findHoldUri.resolve("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
-            //                String[] librisHoldingUriListAndEtag = doLibrisGet(findHoldUri);
-        }
-
-        return null;
-    }
-
-    private static String librisLookup(Object node, String JSLTKey) throws IOException, URISyntaxException, ProtocolException {
-        if (node instanceof Map) {
-            Map map = (Map) node;
-
-            if (map.containsKey(JSLTKey)) {
-                return getUriFromLibris( JSLTKey, (String) map.get(JSLTKey) );
-            }
-
-            String removedKey = null;
-            String guid = null;
-            Iterator it = map.keySet().iterator();
-            while (it.hasNext()) {
-                String key = (String) it.next();
-                String result = librisLookup(map.get(key), JSLTKey);
-                if (result != null) {
-                    guid = result;
-                    it.remove();
-                    removedKey = key;
-                }
-            }
-            if (guid != null) {
-                map.put(removedKey, guid);
-            }
-
-        } else if (node instanceof List) {
-            List list = (List) node;
-            String guid = null;
-            Iterator it =  list.iterator();
-            while (it.hasNext()) {
-                Object element = it.next();
-
-                String result = librisLookup(element, JSLTKey);
-                if (result != null) {
-                    guid = result;
-                    it.remove();
-                }
-            }
-            if (guid != null) {
-                list.add(guid);
-            }
-        }
-
-        return null;
-    }*/
-
     public static String getAuthToken() throws IOException, ParseException {
         final String loginUrl = System.getenv("LIBRIS_LOGIN_URL");
         final String clientId = System.getenv("LIBRIS_CLIENT_ID");
@@ -406,10 +364,10 @@ public class LibrisWriteBack {
         }
     }
 
-    public static int writeLibrisHolding(String librisHoldingUri, Map librisHolding, String ETag, String authToken, String sigel) throws IOException, ParseException {
+    public static int writeLibrisRecord(String librisUri, Map librisData, String ETag, String authToken, String writingAsSigel) throws IOException, ParseException {
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
-            HttpPut request = new HttpPut(librisHoldingUri);
+            HttpPut request = new HttpPut(librisUri);
             RequestConfig config = RequestConfig.custom()
                     .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
             request.setConfig(config);
@@ -417,17 +375,17 @@ public class LibrisWriteBack {
             request.setHeader("Content-Type", "application/ld+json");
             request.setHeader("If-Match", ETag);
             request.setHeader("User-Agent", "FOLIO integration");
-            request.setHeader("XL-Active-Sigel", sigel);
+            request.setHeader("XL-Active-Sigel", writingAsSigel);
             request.setHeader("Authorization", authToken);
 
-            request.setEntity(new StringEntity(Storage.mapper.writeValueAsString(librisHolding)));
+            request.setEntity(new StringEntity(Storage.mapper.writeValueAsString(librisData)));
 
             ClassicHttpResponse response = httpClient.execute(request);
             if (response.getCode() == 204) {
-                Storage.log("Wrote to " + librisHoldingUri);
+                Storage.log("Wrote to " + librisUri);
             }
             else if (response.getCode() != 429){
-                Storage.log("Failed writing " + librisHoldingUri + " to LIBRIS, got: " + response.getCode() + " with message: " + EntityUtils.toString(response.getEntity()));
+                Storage.log("Failed writing " + librisUri + " to LIBRIS, got: " + response.getCode() + " with message: " + EntityUtils.toString(response.getEntity()));
             }
             return response.getCode();
         }

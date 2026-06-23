@@ -180,6 +180,7 @@ public class LibrisWriteBack {
                                     Storage.log("Was unable to reserve a sequence number from: " + sequenceString + " / " + sequenceUri);
                                 }
                             } else {
+                                m.put("shelfControlNumber", controlNumberString);
                                 Storage.log("Sequence number: " + controlNumberString + " already present, not reserving new number.");
                             }
                         }

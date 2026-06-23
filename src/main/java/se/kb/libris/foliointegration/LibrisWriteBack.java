@@ -169,13 +169,13 @@ public class LibrisWriteBack {
                         String sequenceUri = lookupShelfMarkSequence(sequenceString);
 
                         if (sequenceUri != null) { // Link a found shelfMark sequence.
-                            Storage.log("For " + holdingId + " looked up " + sequenceString + " and found " + sequenceUri);
+                            Storage.log("For " + librisHoldingUri + " looked up " + sequenceString + " and found " + sequenceUri);
                             m.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
                             if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
                                 controlNumberString = reserveShelfControlNumber(sequenceUri, librisAuthToken, sigel);
                                 if (controlNumberString != null) {
                                     m.put("shelfControlNumber", controlNumberString);
-                                    Storage.log("Reserved the sequence number" + controlNumberString + " from " + sequenceUri);
+                                    Storage.log("Reserved the sequence number " + controlNumberString + " from " + sequenceUri);
                                 } else {
                                     Storage.log("Was unable to reserve a sequence number from: " + sequenceString + " / " + sequenceUri);
                                 }
@@ -185,7 +185,7 @@ public class LibrisWriteBack {
                             }
                         }
                         else {
-                            Storage.log("For " + holdingId + " found no shelf mark sequence for: " + sequenceString + " in libris. Leaving shelf mark as is.");
+                            Storage.log("For " + librisHoldingUri + " found no shelf mark sequence for: " + sequenceString + " in libris. Leaving shelf mark as is.");
                         }
                     }
 

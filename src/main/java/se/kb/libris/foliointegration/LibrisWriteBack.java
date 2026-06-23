@@ -166,23 +166,25 @@ public class LibrisWriteBack {
                             controlNumberString = null;
                         }
 
-                        //Storage.log("    parsed as : " + sequenceString + " / " + controlNumberString);
                         String sequenceUri = lookupShelfMarkSequence(sequenceString);
-                        //Storage.log("    looked up as : " + sequenceString + " = " + sequenceUri);
 
                         if (sequenceUri != null) { // Link a found shelfMark sequence.
+                            Storage.log("For " + holdingId + " looked up " + sequenceString + " and found " + sequenceUri);
                             m.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
                             if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
                                 controlNumberString = reserveShelfControlNumber(sequenceUri, librisAuthToken, sigel);
                                 if (controlNumberString != null) {
                                     m.put("shelfControlNumber", controlNumberString);
+                                    Storage.log("Reserved the sequence number" + controlNumberString + " from " + sequenceUri);
                                 } else {
                                     Storage.log("Was unable to reserve a sequence number from: " + sequenceString + " / " + sequenceUri);
                                 }
+                            } else {
+                                Storage.log("Sequence number: " + controlNumberString + " already present, not reserving new number.");
                             }
                         }
                         else {
-                            Storage.log("Found no shelf mark sequence for: " + sequenceString + " in libris. Leaving shelf mark as is.");
+                            Storage.log("For " + holdingId + " found no shelf mark sequence for: " + sequenceString + " in libris. Leaving shelf mark as is.");
                         }
                     }
 
@@ -253,6 +255,9 @@ public class LibrisWriteBack {
             if (searchResultMap.containsKey("items")) {
                 for (Object o : (List)searchResultMap.get("items")) {
                     if (o instanceof Map item) {
+
+                        // ALSO CHECK "qualifier" ??
+
                         if (item.containsKey("label")) {
                             Object ol = item.get("label");
                             if (ol instanceof String labelString) {
@@ -269,7 +274,6 @@ public class LibrisWriteBack {
                 }
             }
         }
-        //throw new RuntimeException("Failed ShelfMarkSequence lookup on " + name);
         return null;
     }
 

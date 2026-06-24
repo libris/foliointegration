@@ -502,6 +502,20 @@ public class Format {
 
         converted.put("holdingsRecords", folioHoldings);
 
+        // instance relations
+        if (jsltModifiedInstance.containsKey("succeedingTitles") || jsltModifiedInstance.containsKey("precedingTitles")) {
+            Map instanceRelations = new HashMap();
+            if (jsltModifiedInstance.containsKey("succeedingTitles")) {
+                instanceRelations.put("succeedingTitles", jsltModifiedInstance.get("succeedingTitles"));
+            }
+            if (jsltModifiedInstance.containsKey("precedingTitles")) {
+                instanceRelations.put("precedingTitles", jsltModifiedInstance.get("precedingTitles"));
+            }
+            converted.put("instanceRelations", instanceRelations);
+        }
+        converted.remove("precedingTitles");
+        converted.remove("succeedingTitles");
+
         //Storage.log(" ** CONVERTED INTO: " + converted);
 
         return converted;

@@ -513,8 +513,9 @@ public class Format {
             }
             converted.put("instanceRelations", instanceRelations);
         }
-        converted.remove("precedingTitles");
-        converted.remove("succeedingTitles");
+
+        jsltModifiedInstance.remove("precedingTitles");
+        jsltModifiedInstance.remove("succeedingTitles");
 
         //Storage.log(" ** CONVERTED INTO: " + converted);
 

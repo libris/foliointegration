@@ -1,4 +1,4 @@
 FROM sourcemation/jdk-25
-COPY ./build/libs/foliolibrisintegration.jar .
+COPY ./build/libs/foliointegration.jar .
 EXPOSE 8080
-CMD ["java", "-jar", "foliolibrisintegration.jar"]
+CMD ["java", "-jar", "foliointegration.jar"]

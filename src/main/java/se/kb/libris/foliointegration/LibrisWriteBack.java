@@ -94,10 +94,25 @@ public class LibrisWriteBack {
             Map instanceMap = Storage.mapper.readValue(instanceString, Map.class);
             String librisInstanceUri = (String) instanceMap.get("sourceUri");
 
-            // Get all the items for this holding, and "put them in" the holding
-            String itemsString = FolioWriting.getFromFolio("/inventory/items-by-holdings-id?offset=0&limit=2000&query=holdingsRecordId=" + holdingId);
-            Map itemsMap = Storage.mapper.readValue(itemsString, Map.class);
-            holdingMap.put("items", itemsMap.get("items"));
+            // Get _all_ holdings for this instance
+            String allHoldingsString = FolioWriting.getFromFolio("/holdings-storage/holdings?offset=0&limit=2000&query=instanceId=" + instanceId);
+            Map allHoldingsMap = Storage.mapper.readValue(allHoldingsString, Map.class);
+            List allHoldingsList = (List) allHoldingsMap.get("holdingsRecords");
+            List<String> allHoldingIDs = new ArrayList();
+            for (Object holding : allHoldingsList) {
+                if (holding instanceof Map listedHoldingMap) {
+                    allHoldingIDs.add( (String) listedHoldingMap.get("id") );
+                }
+            }
+
+            // Get all the items for these holdings, and "put them in" the original holding
+            List allItems = new ArrayList();
+            for (String listedHoldingId : allHoldingIDs) {
+                String itemsString = FolioWriting.getFromFolio("/inventory/items-by-holdings-id?offset=0&limit=2000&query=holdingsRecordId=" + listedHoldingId);
+                Map itemsMap = Storage.mapper.readValue(itemsString, Map.class);
+                allItems.addAll( (List) itemsMap.get("items") );
+            }
+            holdingMap.put("items", allItems);
             doReverseLookups(holdingMap);
 
             // Figure out which libris library this is about

@@ -83,8 +83,8 @@ public class LibrisWriteBack {
             Long eventTimeStamp = (Long) eventMap.get("eventTs");
 
             // Both creations and edits have "new" (updates also have "old"). Get the folio holding
-            Map item = (Map) eventMap.get("new");
-            String holdingId = (String) item.get("holdingsRecordId");
+            Map newEventitem = (Map) eventMap.get("new");
+            String holdingId = (String) newEventitem.get("holdingsRecordId");
             String holdingString = FolioWriting.getFromFolio("/holdings-storage/holdings/" + holdingId);
             Map holdingMap = Storage.mapper.readValue(holdingString, Map.class);
 
@@ -98,129 +98,47 @@ public class LibrisWriteBack {
             String allHoldingsString = FolioWriting.getFromFolio("/holdings-storage/holdings?offset=0&limit=2000&query=instanceId=" + instanceId);
             Map allHoldingsMap = Storage.mapper.readValue(allHoldingsString, Map.class);
             List allHoldingsList = (List) allHoldingsMap.get("holdingsRecords");
-            List<String> allHoldingIDs = new ArrayList();
+
+            // Get all the items for these holdings, and split them, some are going to S, some to SRo
+            List allSItems = new ArrayList();
+            List allSRoItems = new ArrayList();
             for (Object holding : allHoldingsList) {
                 if (holding instanceof Map listedHoldingMap) {
-                    allHoldingIDs.add( (String) listedHoldingMap.get("id") );
-                }
-            }
+                    String itemsString = FolioWriting.getFromFolio("/inventory/items-by-holdings-id?offset=0&limit=2000&query=holdingsRecordId=" + listedHoldingMap.get("id"));
+                    Map itemsMap = Storage.mapper.readValue(itemsString, Map.class);
 
-            // Get all the items for these holdings, and "put them in" the original holding
-            List allItems = new ArrayList();
-            for (String listedHoldingId : allHoldingIDs) {
-                String itemsString = FolioWriting.getFromFolio("/inventory/items-by-holdings-id?offset=0&limit=2000&query=holdingsRecordId=" + listedHoldingId);
-                Map itemsMap = Storage.mapper.readValue(itemsString, Map.class);
-                allItems.addAll( (List) itemsMap.get("items") );
-            }
-            holdingMap.put("items", allItems);
-            doReverseLookups(holdingMap);
-
-            // Figure out which libris library this is about
-            // TEMP, ASSUMPTIONS ABOUT KB SIGEL BASED ON LOCATION. THIS SHOULD NOT REMAIN
-            String sigel = "S";
-            if (holdingMap.get("permanentLocationId").equals("Rogge"))
-                sigel = "SRo";
-            // Library URIs are *not* env-specific..
-            //String libraryUri = new URI(LIBRIS_BASE_URL).resolve("/library/"+sigel).toString();
-            String libraryUri = new URI("https://libris.kb.se/library/"+sigel).toString();
-            holdingMap.put("librisLibraryUri", libraryUri);
-
-
-            // Having a libris bibliographic URI + Library URI means we can identify the libris holding record in question.
-            URI findHoldUri = new URI(LIBRIS_BASE_URL);
-            findHoldUri = findHoldUri.resolve("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
-            String[] librisHoldingUriListAndEtag = doLibrisGet(findHoldUri);
-            List librisHoldingUriList = Storage.mapper.readValue(librisHoldingUriListAndEtag[0], List.class);
-            if (librisHoldingUriList.isEmpty())
-                throw new RuntimeException("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri);
-            String librisHoldingUri = (String) librisHoldingUriList.get(0);
-            String[] librisHoldingRecordAndEtag = doLibrisGet(new URI(librisHoldingUri));
-            Map librisHoldingMap = Storage.mapper.readValue(librisHoldingRecordAndEtag[0], Map.class);
-
-            // Apply the JSLT transform to our folio holding and items, to get a libris component-list
-            Expression writebackJSLT = Parser.compileString(Format.librisWritebackJsltConversion, new ArrayList<>()); // no extra functions for now.
-            JsonNode originalJsonNode = Storage.mapper.valueToTree(holdingMap);
-            JsonNode transformedJsonNode = writebackJSLT.apply(originalJsonNode);
-            List newLibrisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
-
-            // Set the proper ShelfMark and shelfControlNumber on each item.
-            for (Object o : newLibrisComponentList) {
-                if (o instanceof Map m) {
-
-                    // This stuff arrives as:
-                    // .shelfMark = Sv2023Q [OR] Sv2023Q 346346
-
-                    // The end result should be something like:
-                    // .shelfControlNumber	"1815"
-                    // .shelfMark            [0] {@id : link-to-Sv2023Q...}
-
-                    // If an item has a multi-word shelfMark, the first is the "suite" (sequence) the rest is the number from that sequence.
-                    // The sequence must be replaced by a link in libris.
-                    // If there was no sequence number, one must be taken from the sequence.
-
-                    if (m.containsKey("shelfMark")) {
-                        Object sm = m.get("shelfMark");
-                        if (sm instanceof List l) {
-                            sm = l.get(0);
-                        }
-                        Map shelfMarkMap = ((Map) sm);
-                        Object label = shelfMarkMap.get("label");
-                        if (label instanceof List l) {
-                            label = l.get(0);
-                        }
-                        String shelfMarkString = ( (String) label ).trim();
-
-                        int spaceAt = shelfMarkString.indexOf(" ");
-                        String sequenceString;
-                        String controlNumberString;
-                        if (spaceAt != -1) {
-                            sequenceString = shelfMarkString.substring(0, spaceAt).trim();
-                            controlNumberString = shelfMarkString.substring(spaceAt).trim();
-                        } else {
-                            sequenceString = shelfMarkString;
-                            controlNumberString = null;
-                        }
-
-                        String sequenceUri = lookupShelfMarkSequence(sequenceString);
-
-                        if (sequenceUri != null) { // Link a found shelfMark sequence.
-                            Storage.log("For " + librisHoldingUri + " looked up " + sequenceString + " and found " + sequenceUri);
-                            m.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
-                            if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
-                                controlNumberString = reserveShelfControlNumber(sequenceUri, librisAuthToken, sigel);
-                                if (controlNumberString != null) {
-                                    m.put("shelfControlNumber", controlNumberString);
-                                    Storage.log("Reserved the sequence number " + controlNumberString + " from " + sequenceUri);
-                                } else {
-                                    Storage.log("Was unable to reserve a sequence number from: " + sequenceString + " / " + sequenceUri);
-                                }
-                            } else {
-                                m.put("shelfControlNumber", controlNumberString);
-                                Storage.log("Sequence number: " + controlNumberString + " already present, not reserving new number.");
-                            }
-                        }
-                        else {
-                            Storage.log("For " + librisHoldingUri + " found no shelf mark sequence for: " + sequenceString + " in libris. Leaving shelf mark as is.");
+                    // TEMP, ASSUMPTIONS ABOUT KB SIGEL BASED ON LOCATION. THIS SHOULD NOT REMAIN
+                    String sigel = "S";
+                    if (listedHoldingMap.get("permanentLocationId").equals("Rogge")) {
+                        sigel = "SRo";
+                    }
+                    String libraryUri = new URI("https://libris.kb.se/library/"+sigel).toString();
+                    List items = (List) itemsMap.get("items");
+                    for (Object item : items) {
+                        if (item instanceof Map itemMap) {
+                            // ARTIFICIAL PROPERTIES FOR JSLT
+                            itemMap.put("librisLibraryUri", libraryUri);
+                            itemMap.put("instanceId", instanceId); // the folio instance GUID
+                            itemMap.put("holdingId", listedHoldingMap.get("id")); // the folio holding GUID
                         }
                     }
-
+                    if (sigel.equals("S")) {
+                        allSItems.addAll( items );
+                    } else {
+                        allSRoItems.addAll( items );
+                    }
                 }
             }
 
-            // Replace the old hasComponent list with the new one.
-            List graphList = (List) librisHoldingMap.get("@graph");
-            while (graphList.size() > 2) { // we don't want "lens cards" and such crap, just the plain data for this record.
-                graphList.removeLast();
+            if (!allSItems.isEmpty()) {
+                doReverseLookups(allSItems);
+                writeItemList(allSItems, "https://libris.kb.se/library/S", "S", librisInstanceUri, librisAuthToken);
             }
-            Map mainEntity = (Map) graphList.get(1);
-            mainEntity.put("hasComponent", newLibrisComponentList);
-            librisHoldingMap.remove("@context");
 
-            // Write to LIBRIS
-            int writeResultCode = 0;
-            do {
-                writeResultCode = writeLibrisRecord(librisHoldingUri, librisHoldingMap, librisHoldingRecordAndEtag[1], librisAuthToken, sigel);
-            } while (writeResultCode == 429); // If we get a 429 (concurrent modification) try again.
+            if (!allSRoItems.isEmpty()) {
+                doReverseLookups(allSRoItems);
+                writeItemList(allSRoItems, "https://libris.kb.se/library/SRo", "SRo", librisInstanceUri, librisAuthToken);
+            }
 
             return true;
 
@@ -228,6 +146,105 @@ public class LibrisWriteBack {
             Storage.log("Failed handling KAFKA event. The value received from KAFKA was this:\n" + event, e);
         }
         return false;
+    }
+
+    private static void writeItemList(List items, String libraryUri, String sigel, String librisInstanceUri, String librisAuthToken) throws URISyntaxException, ProtocolException, IOException {
+        // Having a libris bibliographic URI + Library URI means we can identify the libris holding record in question.
+        URI findHoldUri = new URI(LIBRIS_BASE_URL);
+        findHoldUri = findHoldUri.resolve("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
+        String[] librisHoldingUriListAndEtag = doLibrisGet(findHoldUri);
+        List librisHoldingUriList = Storage.mapper.readValue(librisHoldingUriListAndEtag[0], List.class);
+        if (librisHoldingUriList.isEmpty())
+            throw new RuntimeException("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri);
+        String librisHoldingUri = (String) librisHoldingUriList.get(0);
+        String[] librisHoldingRecordAndEtag = doLibrisGet(new URI(librisHoldingUri));
+        Map librisHoldingMap = Storage.mapper.readValue(librisHoldingRecordAndEtag[0], Map.class);
+
+        // Apply the JSLT transform to our folio holding and items, to get a libris component-list
+        Map jsltInput = Map.of("items", items);
+        Expression writebackJSLT = Parser.compileString(Format.librisWritebackJsltConversion, new ArrayList<>()); // no extra functions for now.
+        JsonNode originalJsonNode = Storage.mapper.valueToTree(jsltInput);
+        JsonNode transformedJsonNode = writebackJSLT.apply(originalJsonNode);
+        List newLibrisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
+
+        // Set the proper ShelfMark and shelfControlNumber on each item.
+        for (Object o : newLibrisComponentList) {
+            if (o instanceof Map m) {
+
+                // This stuff arrives as:
+                // .shelfMark = Sv2023Q [OR] Sv2023Q 346346
+
+                // The end result should be something like:
+                // .shelfControlNumber	"1815"
+                // .shelfMark            [0] {@id : link-to-Sv2023Q...}
+
+                // If an item has a multi-word shelfMark, the first is the "suite" (sequence) the rest is the number from that sequence.
+                // The sequence must be replaced by a link in libris.
+                // If there was no sequence number, one must be taken from the sequence.
+
+                if (m.containsKey("shelfMark")) {
+                    Object sm = m.get("shelfMark");
+                    if (sm instanceof List l) {
+                        sm = l.get(0);
+                    }
+                    Map shelfMarkMap = ((Map) sm);
+                    Object label = shelfMarkMap.get("label");
+                    if (label instanceof List l) {
+                        label = l.get(0);
+                    }
+                    String shelfMarkString = ( (String) label ).trim();
+
+                    int spaceAt = shelfMarkString.indexOf(" ");
+                    String sequenceString;
+                    String controlNumberString;
+                    if (spaceAt != -1) {
+                        sequenceString = shelfMarkString.substring(0, spaceAt).trim();
+                        controlNumberString = shelfMarkString.substring(spaceAt).trim();
+                    } else {
+                        sequenceString = shelfMarkString;
+                        controlNumberString = null;
+                    }
+
+                    String sequenceUri = lookupShelfMarkSequence(sequenceString);
+
+                    if (sequenceUri != null) { // Link a found shelfMark sequence.
+                        Storage.log("For " + librisHoldingUri + " looked up " + sequenceString + " and found " + sequenceUri);
+                        m.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
+                        if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
+                            controlNumberString = reserveShelfControlNumber(sequenceUri, librisAuthToken, sigel);
+                            if (controlNumberString != null) {
+                                m.put("shelfControlNumber", controlNumberString);
+                                Storage.log("Reserved the sequence number " + controlNumberString + " from " + sequenceUri);
+                            } else {
+                                Storage.log("Was unable to reserve a sequence number from: " + sequenceString + " / " + sequenceUri);
+                            }
+                        } else {
+                            m.put("shelfControlNumber", controlNumberString);
+                            Storage.log("Sequence number: " + controlNumberString + " already present, not reserving new number.");
+                        }
+                    }
+                    else {
+                        Storage.log("For " + librisHoldingUri + " found no shelf mark sequence for: " + sequenceString + " in libris. Leaving shelf mark as is.");
+                    }
+                }
+
+            }
+        }
+
+        // Replace the old hasComponent list with the new one.
+        List graphList = (List) librisHoldingMap.get("@graph");
+        while (graphList.size() > 2) { // we don't want "lens cards" and such crap, just the plain data for this record.
+            graphList.removeLast();
+        }
+        Map mainEntity = (Map) graphList.get(1);
+        mainEntity.put("hasComponent", newLibrisComponentList);
+        librisHoldingMap.remove("@context");
+
+        // Write to LIBRIS
+        int writeResultCode = 0;
+        do {
+            writeResultCode = writeLibrisRecord(librisHoldingUri, librisHoldingMap, librisHoldingRecordAndEtag[1], librisAuthToken, sigel);
+        } while (writeResultCode == 429); // If we get a 429 (concurrent modification) try again.
     }
 
     private static String reserveShelfControlNumber(String sequenceUri, String librisAuthToken, String sigel) throws URISyntaxException, IOException, ProtocolException {

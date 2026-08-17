@@ -109,9 +109,11 @@ public class LibrisWriteBack {
 
                     // TEMP, ASSUMPTIONS ABOUT KB SIGEL BASED ON LOCATION. THIS SHOULD NOT REMAIN
                     String sigel = "S";
+                    doReverseLookups(listedHoldingMap);
                     if (listedHoldingMap.get("permanentLocationId").equals("Rogge")) {
                         sigel = "SRo";
                     }
+                    //Storage.log("  (choosing libris holding:) passing " + listedHoldingMap.get("id") + " location: " + listedHoldingMap.get("permanentLocationId") + " belongs to " + sigel);
                     String libraryUri = new URI("https://libris.kb.se/library/"+sigel).toString();
                     List items = (List) itemsMap.get("items");
                     for (Object item : items) {

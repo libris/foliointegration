@@ -239,7 +239,12 @@ public class LibrisWriteBack {
             graphList.removeLast();
         }
         Map mainEntity = (Map) graphList.get(1);
-        mainEntity.put("hasComponent", newLibrisComponentList);
+        // No empty componentLists.
+        if (newLibrisComponentList.isEmpty()) {
+            mainEntity.remove("hasComponent");
+        } else {
+            mainEntity.put("hasComponent", newLibrisComponentList);
+        }
         librisHoldingMap.remove("@context");
 
         // Write to LIBRIS

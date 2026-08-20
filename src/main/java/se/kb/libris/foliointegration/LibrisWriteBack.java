@@ -26,6 +26,10 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.*;
 
@@ -61,16 +65,46 @@ public class LibrisWriteBack {
         // TODO: Consumer.seek(long) // to our last handled timeStamp. No? Maybe no need.
     }
 
-    public static boolean run() throws IOException, ParseException {
+    public static boolean run() throws IOException, ParseException, SQLException {
         boolean changed = false;
         String librisAuthToken = getAuthToken();
+        Connection connection = Storage.getConnection();
+
+        // Collect and store folio/kafka events
         if (librisAuthToken != null) {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
             for (ConsumerRecord<String, String> record : records) {
                 String key = record.key();
                 String value = record.value();
                 //Storage.log(String.format("Kafka event %s: key = %-10s value = %s", topic, key, value));
-                changed |= handleEvent(value, librisAuthToken);
+
+                try (PreparedStatement statement = connection.prepareStatement("INSERT OR REPLACE INTO folio_events(value) VALUES(?)")) {
+                    statement.setString(1, value);
+                    statement.execute();
+                }
+                connection.commit();
+            }
+        }
+
+        // Act on the (one) next event from the queue
+        try (PreparedStatement statement = connection.prepareStatement("SELECT id, value FROM folio_events ORDER BY id ASC LIMIT 1")) {
+            statement.execute();
+            try (ResultSet resultSet = statement.getResultSet()) {
+                if (resultSet.next()) {
+                    int id = resultSet.getInt(1);
+                    String value = resultSet.getString(2);
+
+                    boolean writtenOk = handleEvent(value, librisAuthToken);
+
+                    if (writtenOk) {
+                        try (PreparedStatement deleteStatement = connection.prepareStatement("DELETE FROM folio_events WHERE id = ?")) {
+                            deleteStatement.setLong(1, id);
+                            deleteStatement.execute();
+                        }
+                        connection.commit();
+                    }
+                    changed |= writtenOk;
+                }
             }
         }
 
@@ -145,7 +179,7 @@ public class LibrisWriteBack {
             return true;
 
         } catch (Exception e) {
-            Storage.log("Failed handling KAFKA event. The value received from KAFKA was this:\n" + event, e);
+            Storage.log("Failed handling KAFKA event. Will retry. The event from KAFKA was this:\n" + event, e);
         }
         return false;
     }

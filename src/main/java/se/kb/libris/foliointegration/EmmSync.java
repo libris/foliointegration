@@ -134,7 +134,7 @@ public class EmmSync {
                             INSERT OR REPLACE INTO holding_creations (hrid) VALUES(?);
                             """;
                             try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                                statement.setString(1, "ho-" + recordEntity.get("controlNumber"));
+                                statement.setString(1, "ho" + recordEntity.get("controlNumber"));
                                 statement.execute();
                             }
 

@@ -118,6 +118,9 @@ public class LibrisWriteBack {
 
             // Both creations and edits have "new" (updates also have "old"). Get the folio holding
             Map newEventitem = (Map) eventMap.get("new");
+            // On a DELETE event, there is only an "old" and no new. Which one we look at is irrelevant, we want only the ID from it either way.
+            if (newEventitem == null)
+                newEventitem = (Map) eventMap.get("old");
             String holdingId = (String) newEventitem.get("holdingsRecordId");
             String holdingString = FolioWriting.getFromFolio("/holdings-storage/holdings/" + holdingId);
             Map holdingMap = Storage.mapper.readValue(holdingString, Map.class);

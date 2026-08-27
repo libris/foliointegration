@@ -120,18 +120,27 @@ public class LibrisWriteBack {
             Long eventTimeStamp = (Long) eventMap.get("eventTs");
 
             // Ignore deletes.
-            if (eventMap.get("type").equals("DELETE"))
+            if (eventMap.get("type").equals("DELETE")) {
                 return true;
+            }
 
             // Both creations and edits have "new" (updates also have "old"). Get the folio holding
             Map newEventitem = (Map) eventMap.get("new");
             String holdingId = (String) newEventitem.get("holdingsRecordId");
             String holdingString = FolioWriting.getFromFolio("/holdings-storage/holdings/" + holdingId);
+            if (holdingString == null) { // This can happen when stuff is deleted from folio.
+                Storage.log("Could not get data for /holdings-storage/holdings/" + holdingId + " (ignoring event).");
+                return true;
+            }
             Map holdingMap = Storage.mapper.readValue(holdingString, Map.class);
 
             // Get the folio instance
             String instanceId = (String) holdingMap.get("instanceId");
             String instanceString = FolioWriting.getFromFolio("/instance-storage/instances/" + instanceId);
+            if (instanceString == null) { // This can happen when stuff is deleted from folio.
+                Storage.log("Could not get data for /holdings-storage/holdings/" + instanceId + " (ignoring event).");
+                return true;
+            }
             Map instanceMap = Storage.mapper.readValue(instanceString, Map.class);
             String librisInstanceUri = (String) instanceMap.get("sourceUri");
 

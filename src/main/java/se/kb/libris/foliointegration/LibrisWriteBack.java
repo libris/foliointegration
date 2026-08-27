@@ -118,7 +118,7 @@ public class LibrisWriteBack {
 
             // Ignore deletes.
             if (eventMap.get("type").equals("DELETE"))
-                return false;
+                return true;
 
             // Both creations and edits have "new" (updates also have "old"). Get the folio holding
             Map newEventitem = (Map) eventMap.get("new");

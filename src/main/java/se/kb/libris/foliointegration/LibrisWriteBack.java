@@ -26,6 +26,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -327,7 +330,7 @@ public class LibrisWriteBack {
 
     private static String lookupShelfMarkSequence(String name) throws URISyntaxException, IOException, ProtocolException {
         URI findUri = new URI(LIBRIS_BASE_URL);
-        String[] result = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence%20" + name));
+        String[] result = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence%20" + URLEncoder.encode(name, StandardCharsets.UTF_8)));
         if (result[2].equals("200")) {
             Map searchResultMap = Storage.mapper.readValue(result[0], Map.class);
             if (searchResultMap.containsKey("items")) {

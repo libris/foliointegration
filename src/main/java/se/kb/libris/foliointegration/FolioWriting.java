@@ -146,6 +146,50 @@ public class FolioWriting {
         throw new IOException("Unable to complete request: " + pathAndParameters);
     }
 
+    public static String putToFolio(String path, String body) throws IOException {
+        String token = getToken();
+
+        for (int i = 0; i < 20; ++i) {
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+
+                URI uri = new URI(folioBaseUri);
+                uri = uri.resolve(path);
+                HttpPut request = new HttpPut(uri);
+                RequestConfig config = RequestConfig.custom()
+                        .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();
+                request.setConfig(config);
+
+                StringEntity entity = new StringEntity(body);
+                request.setEntity(entity);
+
+                request.setHeader("X-Okapi-Tenant", folioTenant);
+                request.setHeader("Accept", "application/json");
+                request.setHeader("Content-type", "application/json");
+                request.setHeader("Cookie", token);
+
+                ClassicHttpResponse response = httpClient.execute(request);
+                String responseText = "";
+                if (response.getEntity() != null) {
+                    responseText = EntityUtils.toString(response.getEntity());
+                }
+
+                if (response.getCode() != 200 && response.getCode() != 204) {
+                    Storage.log("Failed FOLIO PUT: " + response);
+                    return null;
+                }
+                return responseText;
+            } catch (IOException | URISyntaxException | ParseException e) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e2) {
+                    // ignore
+                }
+                Storage.log("Retrying Folio PUT for: " + path);
+            }
+        }
+        throw new IOException("Unable to complete request: " + path);
+    }
+
     public static synchronized void queueForExport(Map _folioRecord, Connection connection) throws IOException, InterruptedException, SQLException {
         // Make a copy, as we will be making some slight changes in there
         HashMap folioRecord = new HashMap(_folioRecord);

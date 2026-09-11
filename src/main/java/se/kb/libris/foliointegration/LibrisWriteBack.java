@@ -205,6 +205,10 @@ public class LibrisWriteBack {
         URI findHoldUri = new URI(LIBRIS_BASE_URL);
         findHoldUri = findHoldUri.resolve("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
         String[] librisHoldingUriListAndEtag = doLibrisGet(findHoldUri);
+        if (librisHoldingUriListAndEtag == null) {
+            Storage.log("Was unable to find the LIBRIS holding record for " + libraryUri + " and " + librisInstanceUri + " Ignoring.");
+            return;
+        }
         List librisHoldingUriList = Storage.mapper.readValue(librisHoldingUriListAndEtag[0], List.class);
         if (librisHoldingUriList.isEmpty())
             throw new RuntimeException("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri);
@@ -220,8 +224,14 @@ public class LibrisWriteBack {
         List newLibrisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
 
         // Set the proper ShelfMark and shelfControlNumber on each item.
-        for (Object o : newLibrisComponentList) {
-            if (o instanceof Map m) {
+        //for (Object o : newLibrisComponentList) {
+        for (int i = 0; i < newLibrisComponentList.size(); ++i) {
+            Object o = newLibrisComponentList.get(i);
+
+            Map folioItem = (Map) items.get(i);
+            String folioItemId = (String) folioItem.get("id");
+
+            if (o instanceof Map convertedItem) {
 
                 // This stuff arrives as:
                 // .shelfMark = Sv2023Q [OR] Sv2023Q 346346
@@ -234,8 +244,8 @@ public class LibrisWriteBack {
                 // The sequence must be replaced by a link in libris.
                 // If there was no sequence number, one must be taken from the sequence.
 
-                if (m.containsKey("shelfMark")) {
-                    Object sm = m.get("shelfMark");
+                if (convertedItem.containsKey("shelfMark")) {
+                    Object sm = convertedItem.get("shelfMark");
                     if (sm instanceof List l) {
                         sm = l.get(0);
                     }
@@ -261,17 +271,18 @@ public class LibrisWriteBack {
 
                     if (sequenceUri != null) { // Link a found shelfMark sequence.
                         Storage.log("For " + librisHoldingUri + " looked up " + sequenceString + " and found " + sequenceUri);
-                        m.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
+                        convertedItem.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
                         if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
                             controlNumberString = reserveShelfControlNumber(sequenceUri, librisAuthToken, sigel);
                             if (controlNumberString != null) {
-                                m.put("shelfControlNumber", controlNumberString);
+                                convertedItem.put("shelfControlNumber", controlNumberString);
                                 Storage.log("Reserved the sequence number " + controlNumberString + " from " + sequenceUri);
+                                updateFolioShelfControlNumber(folioItemId, controlNumberString);
                             } else {
                                 Storage.log("Was unable to reserve a sequence number from: " + sequenceString + " / " + sequenceUri);
                             }
                         } else {
-                            m.put("shelfControlNumber", controlNumberString);
+                            convertedItem.put("shelfControlNumber", controlNumberString);
                             Storage.log("Sequence number: " + controlNumberString + " already present, not reserving new number.");
                         }
                     }
@@ -302,6 +313,22 @@ public class LibrisWriteBack {
         do {
             writeResultCode = writeLibrisRecord(librisHoldingUri, librisHoldingMap, librisHoldingRecordAndEtag[1], librisAuthToken, sigel);
         } while (writeResultCode == 429); // If we get a 429 (concurrent modification) try again.
+    }
+
+    private static void updateFolioShelfControlNumber(String itemId, String newShelfControlNumber) throws IOException {
+        //Storage.log(" ** handling update of folio item: " + itemId + " Setting shelf control number: " + newShelfControlNumber);
+        String itemString = FolioWriting.getFromFolio("/inventory/items/" + itemId);
+        //Storage.log(" DIRECT GET ON ITEM: " + itemString);
+
+        Map item = Storage.mapper.readValue(itemString, Map.class);
+        //item.remove("_version");
+
+        String sequence = (String) item.get("itemLevelCallNumber");
+        item.put("itemLevelCallNumber", sequence + " " + newShelfControlNumber);
+
+        String updatedItemString = Storage.mapper.writeValueAsString(item);
+        FolioWriting.putToFolio("/inventory/items/" + itemId, updatedItemString);
+        Storage.log("Wrote/updated folio item: " + itemId + " with itemLevelCallNumber (shelf control number): " + newShelfControlNumber);
     }
 
     private static String reserveShelfControlNumber(String sequenceUri, String librisAuthToken, String sigel) throws URISyntaxException, IOException, ProtocolException {
@@ -367,7 +394,7 @@ public class LibrisWriteBack {
         return null;
     }
 
-    // Returns response (0) and ETAG (1) (or throws)
+    // Returns response (0) and ETAG (1), null for a specific case of _findhold, (or throws)
     private static String[] doLibrisGet(URI uri) throws IOException, ProtocolException {
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
@@ -386,6 +413,15 @@ public class LibrisWriteBack {
                 etag = etagHeader.getValue();
 
             String responseText = EntityUtils.toString(response.getEntity());
+
+            if (response.getCode() == 400) { // This is what you get if you _findhold for a bib that doesn't exist.
+                Storage.log("LIBRIS GET for " + uri + " failed with code: " + response.getCode() + " : " + responseText);
+                return null;
+            }
+
+            if (response.getCode() != 200)
+                throw new RuntimeException("LIBRIS GET for " + uri + " failed with code: " + response.getCode() + " : " + responseText);
+
             String[] tuple = {responseText, etag, ""+response.getCode()};
             return tuple;
         }

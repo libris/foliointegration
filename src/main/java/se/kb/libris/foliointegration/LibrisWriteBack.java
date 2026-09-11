@@ -210,8 +210,10 @@ public class LibrisWriteBack {
             return;
         }
         List librisHoldingUriList = Storage.mapper.readValue(librisHoldingUriListAndEtag[0], List.class);
-        if (librisHoldingUriList.isEmpty())
-            throw new RuntimeException("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri);
+        if (librisHoldingUriList.isEmpty()) {
+            Storage.log("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri + " No holding to write to, ignoring.");
+            return;
+        }
         String librisHoldingUri = (String) librisHoldingUriList.get(0);
         String[] librisHoldingRecordAndEtag = doLibrisGet(new URI(librisHoldingUri));
         Map librisHoldingMap = Storage.mapper.readValue(librisHoldingRecordAndEtag[0], Map.class);

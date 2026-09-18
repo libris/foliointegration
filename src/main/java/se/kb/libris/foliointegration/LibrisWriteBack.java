@@ -236,13 +236,14 @@ public class LibrisWriteBack {
             if (o instanceof Map convertedItem) {
 
                 // This stuff arrives as:
-                // .shelfMark = Sv2023Q [OR] Sv2023Q 346346
+                // .shelfMark = Sv2023Q [OR] Sv2023Q · 346346 [OR] Sv2023Q · 346346 · hylletikett
 
                 // The end result should be something like:
                 // .shelfControlNumber	"1815"
                 // .shelfMark            [0] {@id : link-to-Sv2023Q...}
+                // .shelfLabel          hylletikett
 
-                // If an item has a multi-word shelfMark, the first is the "suite" (sequence) the rest is the number from that sequence.
+                // If an item has a multi-part shelfMark, the first is the "suite" (sequence) the second is the number from that sequence, the third if any is the shelfLabel
                 // The sequence must be replaced by a link in libris.
                 // If there was no sequence number, one must be taken from the sequence.
 
@@ -257,16 +258,19 @@ public class LibrisWriteBack {
                         label = l.get(0);
                     }
                     String shelfMarkString = ( (String) label ).trim();
-
-                    int spaceAt = shelfMarkString.indexOf(" ");
-                    String sequenceString;
-                    String controlNumberString;
-                    if (spaceAt != -1) {
-                        sequenceString = shelfMarkString.substring(0, spaceAt).trim();
-                        controlNumberString = shelfMarkString.substring(spaceAt).trim();
-                    } else {
-                        sequenceString = shelfMarkString;
-                        controlNumberString = null;
+                    
+                    String[] parts = shelfMarkString.split("·");
+                    String sequenceString = null;
+                    String controlNumberString = null;
+                    String shelfLabelString = null;
+                    if (parts.length > 0) {
+                        sequenceString = parts[0];
+                    }
+                    if (parts.length > 1) {
+                        controlNumberString = parts[1];
+                    }
+                    if (parts.length > 2) {
+                        shelfLabelString = parts[2];
                     }
 
                     String sequenceUri = lookupShelfMarkSequence(sequenceString);
@@ -286,6 +290,9 @@ public class LibrisWriteBack {
                         } else {
                             convertedItem.put("shelfControlNumber", controlNumberString);
                             Storage.log("Sequence number: " + controlNumberString + " already present, not reserving new number.");
+                        }
+                        if (shelfLabelString != null) {
+                            convertedItem.put("shelfLabel", shelfLabelString);
                         }
                     }
                     else {

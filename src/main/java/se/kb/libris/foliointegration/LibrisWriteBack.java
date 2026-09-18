@@ -258,19 +258,19 @@ public class LibrisWriteBack {
                         label = l.get(0);
                     }
                     String shelfMarkString = ( (String) label ).trim();
-                    
+
                     String[] parts = shelfMarkString.split("·");
                     String sequenceString = null;
                     String controlNumberString = null;
                     String shelfLabelString = null;
                     if (parts.length > 0) {
-                        sequenceString = parts[0];
+                        sequenceString = parts[0].trim();
                     }
                     if (parts.length > 1) {
-                        controlNumberString = parts[1];
+                        controlNumberString = parts[1].trim();
                     }
                     if (parts.length > 2) {
-                        shelfLabelString = parts[2];
+                        shelfLabelString = parts[2].trim();
                     }
 
                     String sequenceUri = lookupShelfMarkSequence(sequenceString);
@@ -345,10 +345,19 @@ public class LibrisWriteBack {
         if (librisShelfMarkRecordAndEtag[2].equals("200")) {
             String etag = librisShelfMarkRecordAndEtag[1];
             String data = librisShelfMarkRecordAndEtag[0];
+            //Storage.log("LOOKED UP SHELF SEQUENCE: " + data);
             Map dataMap = Storage.mapper.readValue(data, Map.class);
             List graphList = (List) dataMap.get("@graph");
             Map mainEntity = (Map) graphList.get(1);
-            Integer nextNumber = (Integer) mainEntity.get("nextShelfControlNumber");
+            Integer nextNumber = null;
+            if (mainEntity.get("nextShelfControlNumber") instanceof Integer)
+                nextNumber = (Integer) mainEntity.get("nextShelfControlNumber");
+            else if (mainEntity.get("nextShelfControlNumber") instanceof String nextString) {
+                nextNumber = Integer.parseInt(nextString);
+            }
+            else {
+                Storage.log("Broken nextShelfControlNumber for signum suite: " + sequenceUri + " : " + mainEntity.get("nextShelfControlNumber"));
+            }
 
             mainEntity.put("nextShelfControlNumber", nextNumber+1);
 
@@ -376,26 +385,46 @@ public class LibrisWriteBack {
     private static String lookupShelfMarkSequence(String name) throws URISyntaxException, IOException, ProtocolException {
         URI findUri = new URI(LIBRIS_BASE_URL);
         String[] result = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence%20" + URLEncoder.encode(name, StandardCharsets.UTF_8)));
+
+        String qualifier = null;
+        if (name.contains(" ")) { // A multiword name? Only the first part is the name, the rest is a qualifier.
+            String[] parts = name.split(" ");
+            if (parts.length > 1) {
+                name = parts[0].trim();
+                qualifier = parts[1].trim();
+            }
+        }
+
         if (result[2].equals("200")) {
             Map searchResultMap = Storage.mapper.readValue(result[0], Map.class);
             if (searchResultMap.containsKey("items")) {
                 for (Object o : (List)searchResultMap.get("items")) {
                     if (o instanceof Map item) {
 
-                        // ALSO CHECK "qualifier" ??
-
+                        String candidateLabel = null;
                         if (item.containsKey("label")) {
                             Object ol = item.get("label");
                             if (ol instanceof String labelString) {
-                                if (labelString.equals(name)) {
-                                    return (String) item.get("@id");
-                                }
+                                candidateLabel = labelString;
                             } else if (ol instanceof List l) {
-                                if (l.size() > 0 && l.get(0).equals(name)) {
-                                    return (String) item.get("@id");
-                                }
+                                if (l.size() > 0)
+                                    candidateLabel = (String) l.get(0);
                             }
                         }
+
+                        String candidateQualifier = null;
+                        if (item.containsKey("qualifier")) {
+                            Object ql = item.get("qualifier");
+                            if (ql instanceof String qualifierString) {
+                                candidateQualifier = qualifierString;
+                            } else if (ql instanceof List l) {
+                                if (l.size() > 0)
+                                    candidateQualifier = (String) l.get(0);
+                            }
+                        }
+
+                        if (name.equals(candidateLabel) && (qualifier == null || qualifier.equals(candidateQualifier)))
+                            return (String) item.get("@id");
                     }
                 }
             }

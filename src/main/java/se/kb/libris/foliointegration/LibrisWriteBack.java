@@ -262,18 +262,24 @@ public class LibrisWriteBack {
                     String[] parts = shelfMarkString.split("·");
                     String sequenceString = null;
                     String controlNumberString = null;
+                    String sequenceQualifier = null;
                     String shelfLabelString = null;
                     if (parts.length > 0) {
                         sequenceString = parts[0].trim();
                     }
                     if (parts.length > 1) {
                         controlNumberString = parts[1].trim();
+                        int lastSpaceAt = controlNumberString.lastIndexOf(" ");
+                        if (lastSpaceAt != -1) {
+                            sequenceQualifier = controlNumberString.substring(0, lastSpaceAt).trim();
+                            controlNumberString = controlNumberString.substring(lastSpaceAt).trim();
+                        }
                     }
                     if (parts.length > 2) {
                         shelfLabelString = parts[2].trim();
                     }
 
-                    String sequenceUri = lookupShelfMarkSequence(sequenceString);
+                    String sequenceUri = lookupShelfMarkSequence(sequenceString, sequenceQualifier);
 
                     if (sequenceUri != null) { // Link a found shelfMark sequence.
                         Storage.log("For " + librisHoldingUri + " looked up " + sequenceString + " and found " + sequenceUri);
@@ -296,7 +302,7 @@ public class LibrisWriteBack {
                         }
                     }
                     else {
-                        Storage.log("For " + librisHoldingUri + " found no shelf mark sequence for: " + sequenceString + " in libris. Leaving shelf mark as is.");
+                        Storage.log("For " + librisHoldingUri + " found no shelf mark sequence for: " + sequenceString + " (qualifier: " + sequenceQualifier + ") in libris. Leaving shelf mark as is.");
                     }
                 }
 
@@ -382,18 +388,9 @@ public class LibrisWriteBack {
         return null;
     }
 
-    private static String lookupShelfMarkSequence(String name) throws URISyntaxException, IOException, ProtocolException {
+    private static String lookupShelfMarkSequence(String name, String qualifier) throws URISyntaxException, IOException, ProtocolException {
         URI findUri = new URI(LIBRIS_BASE_URL);
         String[] result = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence%20" + URLEncoder.encode(name, StandardCharsets.UTF_8)));
-
-        String qualifier = null;
-        if (name.contains(" ")) { // A multiword name? Only the first part is the name, the rest is a qualifier.
-            String[] parts = name.split(" ");
-            if (parts.length > 1) {
-                name = parts[0].trim();
-                qualifier = parts[1].trim();
-            }
-        }
 
         if (result[2].equals("200")) {
             Map searchResultMap = Storage.mapper.readValue(result[0], Map.class);

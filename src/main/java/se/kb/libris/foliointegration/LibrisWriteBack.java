@@ -424,7 +424,7 @@ public class LibrisWriteBack {
                         }
 
                         if (name.equals(candidateLabel) &&
-                                ( (qualifier == null && candidateQualifier == null ) || qualifier.equals(candidateQualifier)))
+                                ( (qualifier == null && candidateQualifier == null ) ||  ( qualifier != null && qualifier.equals(candidateQualifier) )  ))
                             return (String) item.get("@id");
                     }
                 }

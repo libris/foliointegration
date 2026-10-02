@@ -219,11 +219,13 @@ public class LibrisWriteBack {
         Map librisHoldingMap = Storage.mapper.readValue(librisHoldingRecordAndEtag[0], Map.class);
 
         // Apply the JSLT transform to our folio holding and items, to get a libris component-list
+        //Storage.log("incoming to JSLT: " + Storage.mapper.writeValueAsString(items));
         Map jsltInput = Map.of("items", items);
         Expression writebackJSLT = Parser.compileString(Format.librisWritebackJsltConversion, new ArrayList<>()); // no extra functions for now.
         JsonNode originalJsonNode = Storage.mapper.valueToTree(jsltInput);
         JsonNode transformedJsonNode = writebackJSLT.apply(originalJsonNode);
         List newLibrisComponentList = Storage.mapper.treeToValue(transformedJsonNode, List.class);
+        //Storage.log("out of JSLT: " + Storage.mapper.writeValueAsString(newLibrisComponentList));
 
         // Set the proper ShelfMark and shelfControlNumber on each item.
         //for (Object o : newLibrisComponentList) {
@@ -270,15 +272,29 @@ public class LibrisWriteBack {
                     if (parts.length > 1) {
                         controlNumberString = parts[1].trim();
                         int lastSpaceAt = controlNumberString.lastIndexOf(" ");
-                        if (lastSpaceAt != -1) {
+                        if (lastSpaceAt != -1) { // There is a space separation
                             sequenceQualifier = controlNumberString.substring(0, lastSpaceAt).trim();
                             controlNumberString = controlNumberString.substring(lastSpaceAt).trim();
+                        } else { // No space separation, a single "word"
+
+                            // this is awful, but apparently recommended.
+                            boolean isNumeric = true;
+                            try{ Integer.parseInt(controlNumberString); } catch (NumberFormatException e) {isNumeric = false;}
+                            if (!isNumeric) {
+                                sequenceQualifier = controlNumberString;
+                                controlNumberString = null;
+                            }
+
+                        }
+                        if (controlNumberString != null && controlNumberString.equals("")) {
+                            controlNumberString = null; // "sequence · [empty string]" can't look like we got a number
                         }
                     }
                     if (parts.length > 2) {
                         shelfLabelString = parts[2].trim();
                     }
 
+                    Storage.log("** Based on sequence linkup input: " + shelfMarkString);
                     String sequenceUri = lookupShelfMarkSequence(sequenceString, sequenceQualifier);
 
                     if (sequenceUri != null) { // Link a found shelfMark sequence.
@@ -390,12 +406,19 @@ public class LibrisWriteBack {
 
     private static String lookupShelfMarkSequence(String name, String qualifier) throws URISyntaxException, IOException, ProtocolException {
         URI findUri = new URI(LIBRIS_BASE_URL);
+
+        Storage.log("  looking for sequences to link for name: " + name + " qualifier: " + qualifier);
+
         String[] result = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence%20" + URLEncoder.encode(name, StandardCharsets.UTF_8)));
 
         if (result[2].equals("200")) {
             Map searchResultMap = Storage.mapper.readValue(result[0], Map.class);
             if (searchResultMap.containsKey("items")) {
-                for (Object o : (List)searchResultMap.get("items")) {
+
+                List items = (List)searchResultMap.get("items");
+                Storage.log("  The libris-search for sequences gave " + items.size() + " candidates.");
+
+                for (Object o : items) {
                     if (o instanceof Map item) {
 
                         String candidateLabel = null;
@@ -420,9 +443,14 @@ public class LibrisWriteBack {
                             }
                         }
 
+                        Storage.log("  Considering a candidate " + item.get("@id") + " which has: " + candidateLabel + " / " + candidateQualifier + " [to be compared with] " + name + " / " + qualifier);
+
                         if (name.equals(candidateLabel) &&
-                                ( (qualifier == null && candidateQualifier == null ) ||  ( qualifier != null && qualifier.equals(candidateQualifier) )  ))
+                                ( (qualifier == null && candidateQualifier == null ) ||  ( qualifier != null && qualifier.equals(candidateQualifier) )  )) {
+                            Storage.log("  Yes, this is the one we want: " + item.get("@id"));
                             return (String) item.get("@id");
+                        }
+                        Storage.log("  No, not the one we want: " + item.get("@id"));
                     }
                 }
             }

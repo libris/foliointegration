@@ -273,11 +273,20 @@ public class LibrisWriteBack {
                         controlNumberString = parts[1].trim();
                         int lastSpaceAt = controlNumberString.lastIndexOf(" ");
                         if (lastSpaceAt != -1) { // There is a space separation
+                            String originalcontrolNumberString = controlNumberString;
                             sequenceQualifier = controlNumberString.substring(0, lastSpaceAt).trim();
                             controlNumberString = controlNumberString.substring(lastSpaceAt).trim();
+
+                            boolean isNumeric = true;
+                            try{ Integer.parseInt(controlNumberString); } catch (NumberFormatException e) {isNumeric = false;}
+                            if (!isNumeric) {
+                                // The controlNumber is not numeric, meaning there is no control number and its all a f***ng qualifier!
+                                sequenceQualifier = originalcontrolNumberString;
+                                controlNumberString = null;
+                            }
+
                         } else { // No space separation, a single "word"
 
-                            // this is awful, but apparently recommended.
                             boolean isNumeric = true;
                             try{ Integer.parseInt(controlNumberString); } catch (NumberFormatException e) {isNumeric = false;}
                             if (!isNumeric) {

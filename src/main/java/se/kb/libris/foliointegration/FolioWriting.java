@@ -537,6 +537,16 @@ public class FolioWriting {
         List<Map> localBatch = new ArrayList<>(batch.size());
         localBatch.addAll(batch);
 
+        HashSet<String> hrids = new HashSet<>();
+        Iterator<Map> it = localBatch.iterator();
+        while (it.hasNext()) {
+            Map m = it.next();
+            Map instance = (Map) m.get("instance");
+            String hrid = (String) instance.get("hrid");
+            if (hrids.contains(hrid))
+                it.remove();
+            hrids.add(hrid);
+        }
 
         Thread t = Thread.startVirtualThread(() -> sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, localBatch));
         writerThreads.add(t);

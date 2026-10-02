@@ -46,7 +46,8 @@ public class FolioSync {
             for (int i = 0; i < ids.size(); ++i) {
                 long id = ids.get(i);
                 var cycleProtection = new HashSet<Long>();
-                considerForExport(id, cycleProtection, connection);
+                var exportedHRIDs = new HashSet<String>();
+                considerForExport(id, cycleProtection, exportedHRIDs, connection);
             }
 
             // Commit state for next pass
@@ -68,7 +69,9 @@ public class FolioSync {
         return anythingToDo;
     }
 
-    public static void considerForExport(long id, Set<Long> cycleProtection, Connection connection) throws SQLException, IOException, InterruptedException {
+    public static void considerForExport(long id, Set<Long> cycleProtection, Set<String> exportedHRIDs, Connection connection) throws SQLException, IOException, InterruptedException {
+
+        // Based on sqlite rowIDs
         if (cycleProtection.contains(id))
             return;
         cycleProtection.add(id);
@@ -127,14 +130,19 @@ public class FolioSync {
             }
             if (export) {
                 // A visible difference. Write it to folio!
-                //Storage.log(" ** WRITE OF: " + mainEntity);
-                FolioWriting.queueForExport(mainEntity, connection);
-                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, hrid, checksum) VALUES(?, ?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
-                    statement.setLong(1, id);
-                    statement.setString(2, hrid);
-                    statement.setLong(3, checksum);
-                    statement.execute();
+
+                // Based on FOLIO HRIDs, guard against double-exporting the same thing multiple times.
+                if (!exportedHRIDs.contains(hrid)) {
+                    //Storage.log(" ** WRITE OF: " + mainEntity);
+                    FolioWriting.queueForExport(mainEntity, connection);
+                    try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, hrid, checksum) VALUES(?, ?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
+                        statement.setLong(1, id);
+                        statement.setString(2, hrid);
+                        statement.setLong(3, checksum);
+                        statement.execute();
+                    }
                 }
+                exportedHRIDs.add(hrid);
             }
 
         } else { // If not (a root record): Could it have affected another record that is a root record ?
@@ -161,7 +169,7 @@ public class FolioSync {
             }
 
             for (Long referencingEntityId : possiblyAffectedIDs) {
-                considerForExport(referencingEntityId, cycleProtection, connection);
+                considerForExport(referencingEntityId, cycleProtection, exportedHRIDs, connection);
             }
 
         }

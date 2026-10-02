@@ -343,7 +343,7 @@ public class FolioWriting {
             Map recordSet = Map.of("inventoryRecordSets", localBatch);
             String body = Storage.mapper.writeValueAsString(recordSet);
 
-            //Storage.log(" SENDING: " + body);
+            Storage.log(" ** SENDING BODY TO FOLIO (/inventory-batch-upsert-hrid): " + body);
 
             URI uri = new URI(folioBaseUri);
             uri = uri.resolve("/inventory-batch-upsert-hrid");

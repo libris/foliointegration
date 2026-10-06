@@ -266,48 +266,42 @@ public class LibrisWriteBack {
                     String controlNumberString = null;
                     String sequenceQualifier = null;
                     String shelfLabelString = null;
+                    String sequenceUri = null;
                     if (parts.length > 0) {
                         sequenceString = parts[0].trim();
                     }
+
+                    Storage.log("** Based on sequence linkup input: " + shelfMarkString);
+
+                    // Lookup alternatives for qualifiers
+                    Map<String, String> qualifierToUri = lookupShelfMarkSequences(sequenceString);
+                    List<String> orderedQualifiers = new ArrayList<>(qualifierToUri.keySet());
+                    orderedQualifiers.sort( Comparator.comparingInt(String::length) ); // We need to check "abcd" before "ab", or we miss the longer one.
+                    orderedQualifiers = orderedQualifiers.reversed();
+
                     if (parts.length > 1) {
                         controlNumberString = parts[1].trim();
-                        int lastSpaceAt = controlNumberString.lastIndexOf(" ");
-                        if (lastSpaceAt != -1) { // There is a space separation
-                            String originalcontrolNumberString = controlNumberString;
-                            sequenceQualifier = controlNumberString.substring(0, lastSpaceAt).trim();
-                            controlNumberString = controlNumberString.substring(lastSpaceAt).trim();
-
-                            boolean isNumeric = true;
-                            try{ Integer.parseInt(controlNumberString); } catch (NumberFormatException e) {isNumeric = false;}
-                            if (!isNumeric) {
-                                // The controlNumber is not numeric, meaning there is no control number and its all a f***ng qualifier!
-                                sequenceQualifier = originalcontrolNumberString;
-                                controlNumberString = null;
+                        boolean foundMatch = false;
+                        for (String existingQualifier : orderedQualifiers) {
+                            if (controlNumberString.startsWith(existingQualifier.trim())) {
+                                sequenceQualifier = existingQualifier;
+                                sequenceUri = qualifierToUri.get(sequenceQualifier);
+                                controlNumberString = controlNumberString.replace(sequenceQualifier, "").trim();
+                                foundMatch = true;
+                                break;
                             }
-
-                        } else { // No space separation, a single "word"
-
-                            boolean isNumeric = true;
-                            try{ Integer.parseInt(controlNumberString); } catch (NumberFormatException e) {isNumeric = false;}
-                            if (!isNumeric) {
-                                sequenceQualifier = controlNumberString;
-                                controlNumberString = null;
-                            }
-
                         }
-                        if (controlNumberString != null && controlNumberString.equals("")) {
-                            controlNumberString = null; // "sequence · [empty string]" can't look like we got a number
+
+                        if (!foundMatch && qualifierToUri.containsKey("__none")) {
+                            sequenceUri = qualifierToUri.get("__none");
                         }
                     }
                     if (parts.length > 2) {
                         shelfLabelString = parts[2].trim();
                     }
 
-                    Storage.log("** Based on sequence linkup input: " + shelfMarkString);
-                    String sequenceUri = lookupShelfMarkSequence(sequenceString, sequenceQualifier);
-
                     if (sequenceUri != null) { // Link a found shelfMark sequence.
-                        Storage.log("For " + librisHoldingUri + " looked up " + sequenceString + " and found " + sequenceUri);
+                        Storage.log("For " + librisHoldingUri + " looked up " + sequenceString + " and found " + sequenceUri + " with the qualifier: " + sequenceQualifier);
                         convertedItem.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
                         if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
                             controlNumberString = reserveShelfControlNumber(sequenceUri, librisAuthToken, sigel);
@@ -413,19 +407,17 @@ public class LibrisWriteBack {
         return null;
     }
 
-    private static String lookupShelfMarkSequence(String name, String qualifier) throws URISyntaxException, IOException, ProtocolException {
+    private static Map<String, String> lookupShelfMarkSequences(String name) throws URISyntaxException, IOException, ProtocolException {
         URI findUri = new URI(LIBRIS_BASE_URL);
 
-        Storage.log("  looking for sequences to link for name: " + name + " qualifier: " + qualifier);
-
-        String[] result = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence%20" + URLEncoder.encode(name, StandardCharsets.UTF_8)));
-
-        if (result[2].equals("200")) {
-            Map searchResultMap = Storage.mapper.readValue(result[0], Map.class);
+        String[] response = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence%20" + URLEncoder.encode(name, StandardCharsets.UTF_8)));
+        if (response[2].equals("200")) {
+            Map searchResultMap = Storage.mapper.readValue(response[0], Map.class);
             if (searchResultMap.containsKey("items")) {
 
+                Map<String, String> result = new HashMap<>();
+
                 List items = (List)searchResultMap.get("items");
-                Storage.log("  The libris-search for sequences gave " + items.size() + " candidates.");
 
                 for (Object o : items) {
                     if (o instanceof Map item) {
@@ -452,16 +444,16 @@ public class LibrisWriteBack {
                             }
                         }
 
-                        Storage.log("  Considering a candidate " + item.get("@id") + " which has: " + candidateLabel + " / " + candidateQualifier + " [to be compared with] " + name + " / " + qualifier);
-
-                        if (name.equals(candidateLabel) &&
-                                ( (qualifier == null && candidateQualifier == null ) ||  ( qualifier != null && qualifier.equals(candidateQualifier) )  )) {
-                            Storage.log("  Yes, this is the one we want: " + item.get("@id"));
-                            return (String) item.get("@id");
+                        if (name.equals(candidateLabel)) {
+                            if (candidateQualifier != null)
+                                result.put(candidateQualifier, (String) item.get("@id"));
+                            else
+                                result.put("__none", (String) item.get("@id"));
                         }
-                        Storage.log("  No, not the one we want: " + item.get("@id"));
                     }
                 }
+                Storage.log("  looking for sequences to link for name: " + name + " and found these qualifiers: " + result);
+                return result;
             }
         }
         return null;

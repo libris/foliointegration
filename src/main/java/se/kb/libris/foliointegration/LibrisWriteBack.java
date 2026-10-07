@@ -281,7 +281,6 @@ public class LibrisWriteBack {
 
                     if (parts.length > 1) {
                         controlNumberString = parts[1].trim();
-                        boolean foundMatch = false;
                         for (String existingQualifier : orderedQualifiers) {
                             if (controlNumberString.startsWith(existingQualifier.trim())) {
                                 sequenceQualifier = existingQualifier;
@@ -289,13 +288,16 @@ public class LibrisWriteBack {
                                 controlNumberString = controlNumberString.replace(sequenceQualifier, "").trim();
                                 if (controlNumberString.equals(""))
                                     controlNumberString = null;
-                                foundMatch = true;
                                 break;
                             }
                         }
 
-                        if (!foundMatch && qualifierToUri.containsKey("__none")) {
-                            sequenceUri = qualifierToUri.get("__none");
+                        if (sequenceUri == null) {
+                            Storage.log("  no qualifier match found.");
+                            if (qualifierToUri.containsKey("__none")) {
+                                Storage.log("  But there also is a linkable sequence that lacks qualifier!");
+                                sequenceUri = qualifierToUri.get("__none");
+                            }
                         }
                     }
                     if (parts.length > 2) {

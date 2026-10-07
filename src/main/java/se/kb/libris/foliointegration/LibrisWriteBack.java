@@ -287,6 +287,8 @@ public class LibrisWriteBack {
                                 sequenceQualifier = existingQualifier;
                                 sequenceUri = qualifierToUri.get(sequenceQualifier);
                                 controlNumberString = controlNumberString.replace(sequenceQualifier, "").trim();
+                                if (controlNumberString.equals(""))
+                                    controlNumberString = null;
                                 foundMatch = true;
                                 break;
                             }

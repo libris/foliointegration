@@ -281,25 +281,28 @@ public class LibrisWriteBack {
 
                     if (parts.length > 1) {
                         controlNumberString = parts[1].trim();
-                        for (String existingQualifier : orderedQualifiers) {
-                            if (controlNumberString.startsWith(existingQualifier.trim())) {
-                                sequenceQualifier = existingQualifier;
-                                sequenceUri = qualifierToUri.get(sequenceQualifier);
-                                controlNumberString = controlNumberString.replace(sequenceQualifier, "").trim();
-                                if (controlNumberString.equals(""))
-                                    controlNumberString = null;
-                                break;
-                            }
-                        }
-
-                        if (sequenceUri == null) {
-                            Storage.log("  no qualifier match found.");
-                            if (qualifierToUri.containsKey("__none")) {
-                                Storage.log("  But there also is a linkable sequence that lacks qualifier!");
-                                sequenceUri = qualifierToUri.get("__none");
+                        if (!controlNumberString.equals("")) {
+                            for (String existingQualifier : orderedQualifiers) {
+                                if (controlNumberString.startsWith(existingQualifier.trim())) {
+                                    sequenceQualifier = existingQualifier;
+                                    sequenceUri = qualifierToUri.get(sequenceQualifier);
+                                    controlNumberString = controlNumberString.replace(sequenceQualifier, "").trim();
+                                    if (controlNumberString.equals(""))
+                                        controlNumberString = null;
+                                    break;
+                                }
                             }
                         }
                     }
+
+                    if (sequenceUri == null) {
+                        Storage.log("  no qualifier match found.");
+                        if (qualifierToUri.containsKey("__none")) {
+                            Storage.log("  But there also is a linkable sequence that lacks qualifier!");
+                            sequenceUri = qualifierToUri.get("__none");
+                        }
+                    }
+
                     if (parts.length > 2) {
                         shelfLabelString = parts[2].trim();
                     }

@@ -38,6 +38,8 @@ public class IntegrationServlet extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
 
+        response.setCharacterEncoding("UTF-8");
+
         // Get a read-only database connection. This is separate from the singular connection used by the syncing code,
         // and MUST NOT ever issue writes (see Storage.getConnection for details).
         String dbPath = "/data/libris.sqlite3";

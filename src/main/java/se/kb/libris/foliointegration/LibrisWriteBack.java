@@ -417,7 +417,7 @@ public class LibrisWriteBack {
     private static Map<String, String> lookupShelfMarkSequences(String name) throws URISyntaxException, IOException, ProtocolException {
         URI findUri = new URI(LIBRIS_BASE_URL);
 
-        String[] response = doLibrisGet(findUri.resolve("/find?_q=type:ShelfMarkSequence%20" + URLEncoder.encode(name, StandardCharsets.UTF_8)));
+        String[] response = doLibrisGet(findUri.resolve("/find?_limit=1000&_q=type:ShelfMarkSequence%20" + URLEncoder.encode(name, StandardCharsets.UTF_8)));
         if (response[2].equals("200")) {
             Map searchResultMap = Storage.mapper.readValue(response[0], Map.class);
             if (searchResultMap.containsKey("items")) {

@@ -97,6 +97,16 @@ FOLIO_WRITE_BATCH_SIZE
 This parameter specifies how many records should be sent in each batch. Do *not* set this higher than `20` as that will
 typically cause errors in FOLIO. 
 
+`
+FOLIO_THROTTLE_INTERVAL_MILLIS
+`
+This parameter specifies how large a time window to use for throttling writes to FOLIO
+
+`
+FOLIO_THROTTLE_ALLOWED_PER_INTERVAL
+`
+This parameter specifies how many instances (with associated holdings etc) should be written (at most) within each
+throttling window. This value must be AT LEAST as large as FOLIO_WRITE_BATCH_SIZE.
 
 `
 INSTANCE_JSLT_URL

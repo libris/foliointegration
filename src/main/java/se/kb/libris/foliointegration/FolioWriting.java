@@ -24,6 +24,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 public class FolioWriting {
@@ -40,13 +41,25 @@ public class FolioWriting {
     private static long folioTokenValidUntil = 0;
     private static String folioToken = null;
 
+    private static Instant throttlingWindowStart = Instant.now();
+    private static int throttlingSentThisWindow = 0;
+
+    private static int throttleAllowedPerInterval;
+    private static int throttleIntervalMillis;
+
     static {
         username = System.getenv("FOLIO_USER");
         password = System.getenv("FOLIO_PASS");
         folioBaseUri = System.getenv("OKAPI_URL");
         folioTenant = System.getenv("OKAPI_TENANT");
 
+        throttleIntervalMillis = Integer.parseInt( System.getenv("FOLIO_THROTTLE_INTERVAL_MILLIS") );
+        throttleAllowedPerInterval = Integer.parseInt( System.getenv("FOLIO_THROTTLE_ALLOWED_PER_INTERVAL") );
         folioWriteBatchSize = Integer.parseInt( System.getenv("FOLIO_WRITE_BATCH_SIZE") );
+        if (folioWriteBatchSize > throttleAllowedPerInterval) {
+            Storage.log("CONFIGURATION ERROR: FOLIO_THROTTLE_ALLOWED_PER_INTERVAL must be at least as large as FOLIO_WRITE_BATCH_SIZE, or writing anything becomes impossible.");
+            System.exit(1);
+        }
     }
 
     private static String getToken() {
@@ -548,9 +561,24 @@ public class FolioWriting {
             hrids.add(hrid);
         }
 
-        //Thread t = Thread.startVirtualThread(() -> sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, localBatch));
-        //writerThreads.add(t);
-        sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, new ArrayList<>(batch));
+        Instant now = Instant.now();
+        throttlingSentThisWindow += localBatch.size();
+        if (throttlingSentThisWindow >= throttleAllowedPerInterval) {
+            //Storage.log("** SLOWING DOWN " + throttlingSentThisWindow + " WOULD HAVE GONE OUT (INCLUDING THESE)");
+            while(now.isBefore(throttlingWindowStart.plus(throttleIntervalMillis, ChronoUnit.MILLIS))) {
+                now = Instant.now();
+                Thread.sleep(1);
+            }
+        }
+        if (now.isAfter(throttlingWindowStart.plus(throttleIntervalMillis, ChronoUnit.MILLIS))) {
+            //Storage.log("** NEW WINDOW.");
+            throttlingSentThisWindow = 0;
+            throttlingWindowStart = now;
+        }
+
+        Thread t = Thread.startVirtualThread(() -> sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, localBatch));
+        writerThreads.add(t);
+        //sendParallell(instanceHRIDsToHoldingsHRIDsWithItems, new ArrayList<>(batch));
 
         batch.clear();
 

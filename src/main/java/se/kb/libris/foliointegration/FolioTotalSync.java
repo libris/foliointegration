@@ -43,7 +43,7 @@ public class FolioTotalSync {
         }
 
         for (Long id : ids) {
-            FolioSync.considerForExport(id, new HashSet<>(), new HashSet<>(), connection);
+            FolioSync.considerForExport(id, new HashSet<>(), new HashSet<>(), false, connection);
         }
 
         if (FolioWriting.finalizePendingWrites(connection)) {

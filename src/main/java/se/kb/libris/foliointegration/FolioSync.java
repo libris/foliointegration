@@ -6,6 +6,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.util.*;
 
 public class FolioSync {
@@ -24,7 +25,7 @@ public class FolioSync {
             // Read a batch, ready for syncing to folio
             long modified = syncedUntil;
             List<Long> ids = new ArrayList<>(500);
-            try (PreparedStatement statement = connection.prepareStatement("SELECT id, modified FROM entities WHERE modified > ? ORDER BY modified ASC LIMIT 500")) {
+            try (PreparedStatement statement = connection.prepareStatement("SELECT id, modified FROM entities WHERE modified > ? ORDER BY modified ASC LIMIT 30")) {
                 statement.setLong(1, syncedUntil);
                 statement.execute();
                 try (ResultSet resultSet = statement.getResultSet()) {
@@ -47,7 +48,11 @@ public class FolioSync {
                 long id = ids.get(i);
                 var cycleProtection = new HashSet<Long>();
                 var exportedHRIDs = new HashSet<String>();
-                considerForExport(id, cycleProtection, exportedHRIDs, connection);
+                considerForExport(id, cycleProtection, exportedHRIDs, false, connection);
+            }
+
+            if (!ids.isEmpty()) {
+                Storage.log("Finalizing a FOLIO write round of " + ids.size() + " updates.");
             }
 
             // Commit state for next pass
@@ -57,6 +62,7 @@ public class FolioSync {
                     Storage.writeState(SYNCED_UNTIL_KEY, "" + modified, connection);
                 }
                 connection.commit();
+                Storage.log("Folio sync state: COMMIT.");
             }
         } catch (Exception e) {
             connection.rollback();
@@ -69,7 +75,7 @@ public class FolioSync {
         return anythingToDo;
     }
 
-    public static void considerForExport(long id, Set<Long> cycleProtection, Set<String> exportedHRIDs, Connection connection) throws SQLException, IOException, InterruptedException {
+    public static void considerForExport(long id, Set<Long> cycleProtection, Set<String> exportedHRIDs, boolean lowPriorityExport, Connection connection) throws SQLException, IOException, InterruptedException {
 
         // Based on sqlite rowIDs
         if (cycleProtection.contains(id))
@@ -133,13 +139,19 @@ public class FolioSync {
 
                 // Based on FOLIO HRIDs, guard against double-exporting the same thing multiple times.
                 if (!exportedHRIDs.contains(hrid)) {
-                    //Storage.log(" ** WRITE OF: " + mainEntity);
-                    FolioWriting.queueForExport(mainEntity, connection);
-                    try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, hrid, checksum) VALUES(?, ?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
-                        statement.setLong(1, id);
-                        statement.setString(2, hrid);
-                        statement.setLong(3, checksum);
-                        statement.execute();
+
+                    // This record is to be written to FOLIO. Depending on the circumstances, it will now be queued for immediate writing, or placed in the low pio queue.
+                    if (lowPriorityExport) {
+                        placeInLowPrioExportQueue(id, connection);
+                    } else {
+                        //Storage.log(" ** WRITE OF: " + mainEntity);
+                        FolioWriting.queueForExport(mainEntity, connection);
+                        try (PreparedStatement statement = connection.prepareStatement("INSERT INTO exported_checksum(entity_id, hrid, checksum) VALUES(?, ?, ?) ON CONFLICT(entity_id) DO UPDATE SET checksum=excluded.checksum")) {
+                            statement.setLong(1, id);
+                            statement.setString(2, hrid);
+                            statement.setLong(3, checksum);
+                            statement.execute();
+                        }
                     }
                 }
                 exportedHRIDs.add(hrid);
@@ -168,14 +180,32 @@ public class FolioSync {
 
             }
 
-            for (Long referencingEntityId : possiblyAffectedIDs) {
-                considerForExport(referencingEntityId, cycleProtection, exportedHRIDs, connection);
+            if (possiblyAffectedIDs.size() > 20) {
+                Storage.log("Picked up data change resulting in " + possiblyAffectedIDs.size() + " writes to be done, placing these in low-prio queue.");
+                for (Long referencingEntityId : possiblyAffectedIDs) {
+                    considerForExport(referencingEntityId, cycleProtection, exportedHRIDs, true, connection);
+                }
+            } else {
+                for (Long referencingEntityId : possiblyAffectedIDs) {
+                    considerForExport(referencingEntityId, cycleProtection, exportedHRIDs, lowPriorityExport, connection);
+                }
             }
 
         }
     }
 
-    private static long calculateCheckSum(Object data) {
+    private static void placeInLowPrioExportQueue(long id, Connection connection) throws SQLException {
+        // id is an sqlite row-id.
+        String sql = """
+                                INSERT OR REPLACE INTO low_prio_export_queue (id) VALUES(?);
+                                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, id);
+            statement.execute();
+        }
+    }
+
+    public static long calculateCheckSum(Object data) {
         return calculateCheckSumInternal(data, 1, 1);
     }
 

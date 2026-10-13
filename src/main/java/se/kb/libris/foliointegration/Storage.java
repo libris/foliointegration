@@ -183,6 +183,16 @@ public class Storage {
         }
         {
             String sql = """
+                    CREATE TABLE low_prio_export_queue (
+                            id INTEGER PRIMARY KEY
+                        );
+                    """.stripIndent();
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.execute();
+            }
+        }
+        {
+            String sql = """
                     CREATE TABLE holding_creations (
                             hrid TEXT PRIMARY KEY
                         );

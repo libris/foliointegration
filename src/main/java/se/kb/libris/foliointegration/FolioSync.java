@@ -181,7 +181,7 @@ public class FolioSync {
             }
 
             if (possiblyAffectedIDs.size() > 20) {
-                Storage.log(" ** Picked up data change resulting in " + possiblyAffectedIDs.size() + " writes to be done, placing in low-prio q.");
+                Storage.log("Picked up data change resulting in " + possiblyAffectedIDs.size() + " writes to be done, placing these in low-prio queue.");
                 for (Long referencingEntityId : possiblyAffectedIDs) {
                     considerForExport(referencingEntityId, cycleProtection, exportedHRIDs, true, connection);
                 }
@@ -205,7 +205,7 @@ public class FolioSync {
         }
     }
 
-    private static long calculateCheckSum(Object data) {
+    public static long calculateCheckSum(Object data) {
         return calculateCheckSumInternal(data, 1, 1);
     }
 

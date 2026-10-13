@@ -160,6 +160,7 @@ public class Server {
                         runAgainImmediately |= FolioSync.run();
                         runAgainImmediately |= FolioTotalSync.run();
                         runAgainImmediately |= LibrisWriteBack.run();
+                        runAgainImmediately |= LowPrioritySync.run();
                         if (!runAgainImmediately) {
                             Thread.sleep(100);
                         }

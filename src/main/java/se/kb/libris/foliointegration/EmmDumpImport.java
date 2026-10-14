@@ -15,6 +15,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -197,7 +198,7 @@ public class EmmDumpImport {
                 Storage.writeState(DUMP_SIGEL_KEY, sigel, connection);
             } else {
                 Storage.clearState(DUMP_SIGEL_KEY, connection);
-                Storage.writeState(FolioSync.SYNCED_UNTIL_KEY, "0", connection);
+                Storage.writeState(FolioSync.SYNCED_UNTIL_KEY, ""+Instant.now().toEpochMilli(), connection);
                 Storage.transitionToApplicationState(Storage.APPLICATION_STATE.STAYING_IN_SYNC, connection);
             }
 

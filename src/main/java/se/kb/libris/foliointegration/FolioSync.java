@@ -62,7 +62,6 @@ public class FolioSync {
                     Storage.writeState(SYNCED_UNTIL_KEY, "" + modified, connection);
                 }
                 connection.commit();
-                Storage.log("Folio sync state: COMMIT.");
             }
         } catch (Exception e) {
             connection.rollback();

@@ -320,6 +320,21 @@ public class IntegrationServlet extends HttpServlet {
                 s = " <br/><br/>There are currently " + exportFailureCount + " records out of date because they could not be written to FOLIO. <form action='/csvfailures' method='post'><input type='submit' value='Download CSV list'></form>";
                 os.write(s.getBytes(StandardCharsets.UTF_8));
 
+                String lowPrioCount = "n/a";
+                sql = """
+                    SELECT COUNT(id) FROM low_prio_export_queue;
+                    """;
+                try (PreparedStatement statement = readOnlyConnection.prepareStatement(sql)) {
+                    statement.execute();
+                    try(ResultSet resultSet = statement.getResultSet()) {
+                        if (resultSet.next()) {
+                            lowPrioCount = resultSet.getString(1);
+                        }
+                    }
+                }
+                s = " <br/><br/>There are currently " + lowPrioCount + " entities in the low priority export queue, due to having possibly been affected by changes to another entity. Many of these will not result in actual writes to FOLIO.";
+                os.write(s.getBytes(StandardCharsets.UTF_8));
+
             } else {
                 String s = "<br/>Odd FOLIO sync state. Shouldn't happen.<br/>";
                 os.write(s.getBytes(StandardCharsets.UTF_8));

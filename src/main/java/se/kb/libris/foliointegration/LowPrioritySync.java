@@ -44,7 +44,7 @@ public class LowPrioritySync {
                     }
                 }
                 if (data == null) {
-                    Storage.log("Lowprio Q held deleted record? rowid " + id);
+                    //Storage.log("Lowprio Q held deleted record? rowid " + id);
                     continue;
                 }
                 Map mainEntity = Storage.mapper.readValue(data, Map.class);

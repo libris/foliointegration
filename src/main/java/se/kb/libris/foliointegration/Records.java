@@ -175,6 +175,8 @@ public class Records {
                     uri = uri.replace("https://id.kb.se", "https://id-qa.kb.se");
                 else if (baseUrl.startsWith("https://libris-dev.kb.se"))
                     uri = uri.replace("https://id.kb.se", "https://id-dev.kb.se");
+                else if (baseUrl.startsWith("https://libris-stg.kb.se"))
+                    uri = uri.replace("https://id.kb.se", "https://id-stg.kb.se");
             }
 
             if (cycleProtection.contains(uri))

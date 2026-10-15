@@ -144,6 +144,17 @@ public class LibrisWriteBack {
             Map instanceMap = Storage.mapper.readValue(instanceString, Map.class);
             String librisInstanceUri = (String) instanceMap.get("sourceUri");
 
+            // This is a bit hacky, but folio records typically have sourceUri for prod, not env-specific.
+            String baseUrl = System.getenv("LIBRIS_BASE_URL");
+            if ( !baseUrl.startsWith("https://libris.kb.se") && librisInstanceUri.startsWith("https://libris.kb.se") ) {
+                if (baseUrl.startsWith("https://libris-qa.kb.se"))
+                    librisInstanceUri = librisInstanceUri.replace("https://libris.kb.se", "https://libris-qa.kb.se");
+                else if (baseUrl.startsWith("https://libris-stg.kb.se"))
+                    librisInstanceUri = librisInstanceUri.replace("https://libris.kb.se", "https://libris-stg.kb.se");
+                else if (baseUrl.startsWith("https://libris-dev.kb.se"))
+                    librisInstanceUri = librisInstanceUri.replace("https://libris.kb.se", "https://libris-dev.kb.se");
+            }
+
             // Get _all_ holdings for this instance
             String allHoldingsString = FolioWriting.getFromFolio("/holdings-storage/holdings?offset=0&limit=2000&query=instanceId=" + instanceId);
             Map allHoldingsMap = Storage.mapper.readValue(allHoldingsString, Map.class);

@@ -146,7 +146,7 @@ public class LibrisWriteBack {
 
             // This is a bit hacky, but folio records typically have sourceUri for prod, not env-specific.
             String baseUrl = System.getenv("LIBRIS_BASE_URL");
-            if ( !baseUrl.startsWith("https://libris.kb.se") && librisInstanceUri.startsWith("https://libris.kb.se") ) {
+            if ( !baseUrl.startsWith("https://libris.kb.se") && librisInstanceUri != null && librisInstanceUri.startsWith("https://libris.kb.se") ) {
                 if (baseUrl.startsWith("https://libris-qa.kb.se"))
                     librisInstanceUri = librisInstanceUri.replace("https://libris.kb.se", "https://libris-qa.kb.se");
                 else if (baseUrl.startsWith("https://libris-stg.kb.se"))

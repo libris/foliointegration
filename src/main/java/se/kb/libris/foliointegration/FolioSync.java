@@ -48,7 +48,7 @@ public class FolioSync {
                 long id = ids.get(i);
                 var cycleProtection = new HashSet<Long>();
                 var exportedHRIDs = new HashSet<String>();
-                considerForExport(id, cycleProtection, exportedHRIDs, false, connection);
+                considerForExport(id, cycleProtection, exportedHRIDs, false, connection, true);
             }
 
             if (!ids.isEmpty()) {
@@ -74,7 +74,8 @@ public class FolioSync {
         return anythingToDo;
     }
 
-    public static void considerForExport(long id, Set<Long> cycleProtection, Set<String> exportedHRIDs, boolean lowPriorityExport, Connection connection) throws SQLException, IOException, InterruptedException {
+    public static void considerForExport(long id, Set<Long> cycleProtection, Set<String> exportedHRIDs,
+                                         boolean lowPriorityExport, Connection connection, boolean includeHoldings) throws SQLException, IOException, InterruptedException {
 
         // Based on sqlite rowIDs
         if (cycleProtection.contains(id))
@@ -114,7 +115,7 @@ public class FolioSync {
 
             // Has this record already been exported with this checksum (then we should skip it).
             Records.embellishWithLocalData(mainEntity, new HashSet<>(), connection);
-            mainEntity = Format.formatForFolio(mainEntity, connection);
+            mainEntity = Format.formatForFolio(mainEntity, includeHoldings, connection);
             long checksum = calculateCheckSum(mainEntity);
 
             // Note that this HRID is for the instance, and not the selected item.
@@ -182,11 +183,11 @@ public class FolioSync {
             if (possiblyAffectedIDs.size() > 20) {
                 Storage.log("Picked up data change resulting in " + possiblyAffectedIDs.size() + " writes to be done, placing these in low-prio queue.");
                 for (Long referencingEntityId : possiblyAffectedIDs) {
-                    considerForExport(referencingEntityId, cycleProtection, exportedHRIDs, true, connection);
+                    considerForExport(referencingEntityId, cycleProtection, exportedHRIDs, true, connection, includeHoldings);
                 }
             } else {
                 for (Long referencingEntityId : possiblyAffectedIDs) {
-                    considerForExport(referencingEntityId, cycleProtection, exportedHRIDs, lowPriorityExport, connection);
+                    considerForExport(referencingEntityId, cycleProtection, exportedHRIDs, lowPriorityExport, connection, includeHoldings);
                 }
             }
 

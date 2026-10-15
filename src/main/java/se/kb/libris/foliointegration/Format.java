@@ -447,7 +447,7 @@ public class Format {
         }
     }
 
-    public static Map formatForFolio(Map originalRootHolding, Connection connection) throws SQLException, IOException {
+    public static Map formatForFolio(Map originalRootHolding, boolean includeHoldings, Connection connection) throws SQLException, IOException {
 
         Map originalMainEntity = (Map) originalRootHolding.get("itemOf");
 
@@ -500,7 +500,10 @@ public class Format {
         if (folioHoldings == null)
             folioHoldings = new ArrayList();
 
-        converted.put("holdingsRecords", folioHoldings);
+        if (includeHoldings)
+            converted.put("holdingsRecords", folioHoldings);
+        else
+            converted.remove("holdingsRecords"); // should be a NOP, but to be sure.
 
         // instance relations
         if (jsltModifiedInstance.containsKey("succeedingTitles") || jsltModifiedInstance.containsKey("precedingTitles")) {

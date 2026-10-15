@@ -50,7 +50,7 @@ public class LowPrioritySync {
                 Map mainEntity = Storage.mapper.readValue(data, Map.class);
 
                 Records.embellishWithLocalData(mainEntity, new HashSet<>(), connection);
-                mainEntity = Format.formatForFolio(mainEntity, connection);
+                mainEntity = Format.formatForFolio(mainEntity, true, connection);
                 long checksum = FolioSync.calculateCheckSum(mainEntity);
 
                 // Note that this HRID is for the instance, and not the selected item.

@@ -48,6 +48,12 @@ This is URL on which Libris serves the EMM API. Generally, this should be set to
 for testing/experimentation, please use `https://libris-qa.kb.se/api/emm/`
 
 `
+FOLIO_BASE_URL
+`
+This is URL for the FOLIO instance GUI. For prod, you would typically use something like `https://folio.kb.se` should *not*
+end with a slash. This value will typically be used to construct URLs to folio records. 
+
+`
 FOLIO_USER
 `
 This is the username that the application should use to log into folio.

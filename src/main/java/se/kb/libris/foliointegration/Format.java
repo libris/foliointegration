@@ -49,6 +49,14 @@ public class Format {
         try {
 
             populateStandardLookup(
+                    "holdings-sources?query=cql.allRecords=1%20sortby%20name&limit=5000",
+                    "holdingsRecordsSources",
+                    "__FOLIO_LOOKUP_HOLDING_SOURCE",
+                    "name",
+                    false
+            );
+
+            populateStandardLookup(
                     "locations?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "locations",
                     "__FOLIO_LOOKUP_LOCATION_GUID",

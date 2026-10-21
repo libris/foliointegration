@@ -195,11 +195,13 @@ public class LibrisWriteBack {
             }
 
             if (!allSItems.isEmpty()) {
+                Format.jsltFolioLookups(allSItems);
                 doReverseLookups(allSItems);
                 writeItemList(allSItems, "https://libris.kb.se/library/S", "S", librisInstanceUri, librisAuthToken);
             }
 
             if (!allSRoItems.isEmpty()) {
+                Format.jsltFolioLookups(allSRoItems);
                 doReverseLookups(allSRoItems);
                 writeItemList(allSRoItems, "https://libris.kb.se/library/SRo", "SRo", librisInstanceUri, librisAuthToken);
             }

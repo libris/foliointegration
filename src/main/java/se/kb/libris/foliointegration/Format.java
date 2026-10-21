@@ -48,16 +48,6 @@ public class Format {
     static {
         try {
 
-            Map<String, String> settingToValue = new HashMap<>();
-            settingToValue.put("folio_base_url", System.getenv("FOLIO_BASE_URL"));
-            lookupFunctions.add( o -> jsltFolioLookup(o, "__SETTINGS_LOOKUP", settingToValue) );
-
-            // TEST
-            /*List a = new ArrayList();
-            a.add(Map.of("__SETTINGS_LOOKUP", "folio_base_url"));
-            jsltFolioLookups(a);
-            System.err.println(a);*/
-
             populateStandardLookup(
                     "holdings-sources?query=cql.allRecords=1%20sortby%20name&limit=5000",
                     "holdingsRecordsSources",
@@ -253,7 +243,7 @@ public class Format {
         }
     }
 
-    public static void jsltFolioLookups(Object node) {
+    private static void jsltFolioLookups(Object node) {
         for (var c : lookupFunctions) {
             c.accept(node);
         }

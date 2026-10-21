@@ -170,7 +170,6 @@ public class LibrisWriteBack {
 
                     // TEMP, ASSUMPTIONS ABOUT KB SIGEL BASED ON LOCATION. THIS SHOULD NOT REMAIN
                     String sigel = "S";
-                    Format.jsltFolioLookups(listedHoldingMap);
                     doReverseLookups(listedHoldingMap);
                     if (listedHoldingMap.get("permanentLocationId").equals("Rogge")) {
                         sigel = "SRo";
@@ -181,6 +180,7 @@ public class LibrisWriteBack {
                     for (Object item : items) {
                         if (item instanceof Map itemMap) {
                             // ARTIFICIAL PROPERTIES FOR JSLT
+                            itemMap.put("folioBaseUrl", System.getenv("FOLIO_BASE_URL"));
                             itemMap.put("librisLibraryUri", libraryUri);
                             itemMap.put("instanceId", instanceId); // the folio instance GUID
                             itemMap.put("holdingId", listedHoldingMap.get("id")); // the folio holding GUID
@@ -195,13 +195,11 @@ public class LibrisWriteBack {
             }
 
             if (!allSItems.isEmpty()) {
-                Format.jsltFolioLookups(allSItems);
                 doReverseLookups(allSItems);
                 writeItemList(allSItems, "https://libris.kb.se/library/S", "S", librisInstanceUri, librisAuthToken);
             }
 
             if (!allSRoItems.isEmpty()) {
-                Format.jsltFolioLookups(allSRoItems);
                 doReverseLookups(allSRoItems);
                 writeItemList(allSRoItems, "https://libris.kb.se/library/SRo", "SRo", librisInstanceUri, librisAuthToken);
             }

@@ -170,6 +170,7 @@ public class LibrisWriteBack {
 
                     // TEMP, ASSUMPTIONS ABOUT KB SIGEL BASED ON LOCATION. THIS SHOULD NOT REMAIN
                     String sigel = "S";
+                    Format.jsltFolioLookups(listedHoldingMap);
                     doReverseLookups(listedHoldingMap);
                     if (listedHoldingMap.get("permanentLocationId").equals("Rogge")) {
                         sigel = "SRo";

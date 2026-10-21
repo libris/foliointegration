@@ -253,7 +253,7 @@ public class Format {
         }
     }
 
-    private static void jsltFolioLookups(Object node) {
+    public static void jsltFolioLookups(Object node) {
         for (var c : lookupFunctions) {
             c.accept(node);
         }

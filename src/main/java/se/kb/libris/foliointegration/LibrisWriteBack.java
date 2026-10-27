@@ -196,15 +196,11 @@ public class LibrisWriteBack {
                 }
             }
 
-            if (!allSItems.isEmpty()) {
-                doReverseLookups(allSItems);
-                writeItemList(allSItems, "https://libris.kb.se/library/S", "S", librisInstanceUri, librisAuthToken);
-            }
+            doReverseLookups(allSItems);
+            writeItemList(allSItems, "https://libris.kb.se/library/S", "S", librisInstanceUri, librisAuthToken);
 
-            if (!allSRoItems.isEmpty()) {
-                doReverseLookups(allSRoItems);
-                writeItemList(allSRoItems, "https://libris.kb.se/library/SRo", "SRo", librisInstanceUri, librisAuthToken);
-            }
+            doReverseLookups(allSRoItems);
+            writeItemList(allSRoItems, "https://libris.kb.se/library/SRo", "SRo", librisInstanceUri, librisAuthToken);
 
             return true;
 

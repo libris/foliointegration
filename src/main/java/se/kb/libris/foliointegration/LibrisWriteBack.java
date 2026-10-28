@@ -216,12 +216,12 @@ public class LibrisWriteBack {
         findHoldUri = findHoldUri.resolve("/_findhold?library=" + libraryUri + "&id=" + librisInstanceUri);
         String[] librisHoldingUriListAndEtag = doLibrisGet(findHoldUri);
         if (librisHoldingUriListAndEtag == null) {
-            Storage.log("Was unable to find the LIBRIS holding record for " + libraryUri + " and " + librisInstanceUri + " Ignoring.");
+            //Storage.log("Was unable to find the LIBRIS holding record for " + libraryUri + " and " + librisInstanceUri + " Ignoring.");
             return;
         }
         List librisHoldingUriList = Storage.mapper.readValue(librisHoldingUriListAndEtag[0], List.class);
         if (librisHoldingUriList.isEmpty()) {
-            Storage.log("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri + " No holding to write to, ignoring.");
+            //Storage.log("Unable to locate libris holding record for instance: " + librisInstanceUri + " and library " + libraryUri + " No holding to write to, ignoring.");
             return;
         }
         String librisHoldingUri = (String) librisHoldingUriList.get(0);
@@ -281,7 +281,7 @@ public class LibrisWriteBack {
                         sequenceString = parts[0].trim();
                     }
 
-                    Storage.log("** Based on sequence linkup input: " + shelfMarkString);
+                    //Storage.log("** Based on sequence linkup input: " + shelfMarkString);
 
                     // Lookup alternatives for qualifiers
                     Map<String, String> qualifierToUri = lookupShelfMarkSequences(sequenceString);
@@ -306,9 +306,9 @@ public class LibrisWriteBack {
                     }
 
                     if (sequenceUri == null) {
-                        Storage.log("  no qualifier match found.");
+                        //Storage.log("  no qualifier match found.");
                         if (qualifierToUri.containsKey("__none")) {
-                            Storage.log("  But there also is a linkable sequence that lacks qualifier!");
+                            //Storage.log("  But there also is a linkable sequence that lacks qualifier!");
                             sequenceUri = qualifierToUri.get("__none");
                         }
                     }
@@ -318,7 +318,7 @@ public class LibrisWriteBack {
                     }
 
                     if (sequenceUri != null) { // Link a found shelfMark sequence.
-                        Storage.log("For " + librisHoldingUri + " looked up " + sequenceString + " and found " + sequenceUri + " with the qualifier: " + sequenceQualifier);
+                        Storage.log("For " + librisHoldingUri + " based on input string \"" + shelfMarkString + "\" looked up \"" + sequenceString + "\" and found " + sequenceUri + " with the qualifier: \"" + sequenceQualifier + "\"");
                         convertedItem.put("shelfMark", List.of(Map.of("@id", sequenceUri)));
                         if (controlNumberString == null) { // There appears to be only a "signum svit" but no sequence number here
                             controlNumberString = reserveShelfControlNumber(sequenceUri, librisAuthToken, sigel);
@@ -338,7 +338,7 @@ public class LibrisWriteBack {
                         }
                     }
                     else {
-                        Storage.log("For " + librisHoldingUri + " found no shelf mark sequence for: " + sequenceString + " (qualifier: " + sequenceQualifier + ") in libris. Leaving shelf mark as is.");
+                        Storage.log("For " + librisHoldingUri + " based on input string\" " + shelfMarkString + "\" found no shelf mark sequence for: \"" + sequenceString + "\" (qualifier: \"" + sequenceQualifier + "\") in libris. Leaving shelf mark as is.");
                     }
                 }
 

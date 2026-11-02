@@ -338,7 +338,7 @@ public class LibrisWriteBack {
                         }
                     }
                     else {
-                        Storage.log("For " + librisHoldingUri + " based on input string\" " + shelfMarkString + "\" found no shelf mark sequence for: \"" + sequenceString + "\" (qualifier: \"" + sequenceQualifier + "\") in libris. Leaving shelf mark as is.");
+                        Storage.log("For " + librisHoldingUri + " based on input string \"" + shelfMarkString + "\" found no shelf mark sequence for: \"" + sequenceString + "\" (qualifier: \"" + sequenceQualifier + "\") in libris. Leaving shelf mark as is.");
                     }
                 }
 

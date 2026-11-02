@@ -332,13 +332,32 @@ public class IntegrationServlet extends HttpServlet {
                         }
                     }
                 }
-                s = " <br/><br/>There are currently " + lowPrioCount + " entities in the low priority export queue, due to having possibly been affected by changes to another entity. Many of these will not result in actual writes to FOLIO.";
+                s = " <br/>There are currently " + lowPrioCount + " entities in the low priority export queue, due to having possibly been affected by changes to another entity. Many of these will not result in actual writes to FOLIO.";
                 os.write(s.getBytes(StandardCharsets.UTF_8));
 
             } else {
                 String s = "<br/>Odd FOLIO sync state. Shouldn't happen.<br/>";
                 os.write(s.getBytes(StandardCharsets.UTF_8));
             }
+        }
+
+        // Writeback sync state
+        {
+            String kafkaQueueCount = "n/a";
+            String sql = """
+                    SELECT COUNT(id) FROM folio_events;
+                    """;
+            try (PreparedStatement statement = readOnlyConnection.prepareStatement(sql)) {
+                statement.execute();
+                try(ResultSet resultSet = statement.getResultSet()) {
+                    if (resultSet.next()) {
+                        kafkaQueueCount = resultSet.getString(1);
+                    }
+                }
+            }
+
+            String s = "<br/><br/>There are currently: " + kafkaQueueCount + " FOLIO events consumed from Kafka and waiting to be processed. <br/><br/>";
+            os.write(s.getBytes(StandardCharsets.UTF_8));
         }
 
         // FOLIO TOTAL sync state

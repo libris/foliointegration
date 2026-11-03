@@ -469,7 +469,7 @@ public class LibrisWriteBack {
                         }
                     }
                 }
-                Storage.log("  looking for sequences to link for name: " + name + " and found these qualifiers: " + result);
+                //Storage.log("  looking for sequences to link for name: " + name + " and found these qualifiers: " + result);
                 return result;
             }
         }

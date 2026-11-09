@@ -34,6 +34,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -579,7 +581,20 @@ public class LibrisWriteBack {
         }
     }
 
+    private static final HashMap<String, Instant> writeCycleProtection = new HashMap<>();
+
     public static int writeLibrisRecord(String librisUri, Map librisData, String ETag, String authToken, String writingAsSigel) throws IOException, ParseException {
+        if (writeCycleProtection.containsKey(librisUri)) {
+            Instant when = writeCycleProtection.get(librisUri);
+            if (when.isAfter(Instant.now().minus(2, ChronoUnit.SECONDS))) {
+                // We just wrote this thing, don't do it again.
+                return 204;
+            }
+        }
+        if (writeCycleProtection.size() > 200)
+            writeCycleProtection.clear();
+        writeCycleProtection.put(librisUri, Instant.now());
+
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 
             HttpPut request = new HttpPut(librisUri);

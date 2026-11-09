@@ -595,7 +595,7 @@ public class LibrisWriteBack {
         if (writeCycleProtection.size() > 200)
             writeCycleProtection.clear();
         writeCycleProtection.put(librisUri, Instant.now());
-        Storage.log("No cycle ok to write " + librisUri);
+        //Storage.log("No cycle ok to write " + librisUri);
 
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 

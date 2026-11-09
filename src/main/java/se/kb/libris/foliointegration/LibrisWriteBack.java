@@ -428,6 +428,9 @@ public class LibrisWriteBack {
         URI findUri = new URI(LIBRIS_BASE_URL);
 
         String[] response = doLibrisGet(findUri.resolve("/find?_limit=200&_q=type:ShelfMarkSequence%20" + URLEncoder.encode("\""+name+"\"", StandardCharsets.UTF_8)));
+        if (response == null)
+            return null;
+
         if (response[2].equals("200")) {
             Map searchResultMap = Storage.mapper.readValue(response[0], Map.class);
             if (searchResultMap.containsKey("items")) {

@@ -588,12 +588,14 @@ public class LibrisWriteBack {
             Instant when = writeCycleProtection.get(librisUri);
             if (when.isAfter(Instant.now().minus(2, ChronoUnit.SECONDS))) {
                 // We just wrote this thing, don't do it again.
+                Storage.log("Already wrote " + librisUri + " seconds ago, not doing it again.");
                 return 204;
             }
         }
         if (writeCycleProtection.size() > 200)
             writeCycleProtection.clear();
         writeCycleProtection.put(librisUri, Instant.now());
+        Storage.log("No cycle ok to write " + librisUri);
 
         try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
 

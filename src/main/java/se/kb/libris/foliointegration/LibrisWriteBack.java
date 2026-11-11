@@ -92,7 +92,7 @@ public class LibrisWriteBack {
         }
 
         // Act on the (one) next event from the queue
-        try (PreparedStatement statement = connection.prepareStatement("SELECT id, value FROM folio_events ORDER BY id ASC LIMIT 1")) {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT id, value FROM folio_events ORDER BY id DESC LIMIT 1")) {
             statement.execute();
             try (ResultSet resultSet = statement.getResultSet()) {
                 if (resultSet.next()) {

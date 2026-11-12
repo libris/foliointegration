@@ -91,24 +91,26 @@ public class LibrisWriteBack {
             }
         }
 
-        // Act on the (one) next event from the queue
-        try (PreparedStatement statement = connection.prepareStatement("SELECT id, value FROM folio_events ORDER BY id DESC LIMIT 1")) {
-            statement.execute();
-            try (ResultSet resultSet = statement.getResultSet()) {
-                if (resultSet.next()) {
-                    int id = resultSet.getInt(1);
-                    String value = resultSet.getString(2);
+        for (int i = 0; i < 50; ++i) {
+            // Act on the (one) next event from the queue
+            try (PreparedStatement statement = connection.prepareStatement("SELECT id, value FROM folio_events ORDER BY id DESC LIMIT 1")) {
+                statement.execute();
+                try (ResultSet resultSet = statement.getResultSet()) {
+                    if (resultSet.next()) {
+                        int id = resultSet.getInt(1);
+                        String value = resultSet.getString(2);
 
-                    boolean writtenOk = handleEvent(value, librisAuthToken);
+                        boolean writtenOk = handleEvent(value, librisAuthToken);
 
-                    if (writtenOk) {
-                        try (PreparedStatement deleteStatement = connection.prepareStatement("DELETE FROM folio_events WHERE id = ?")) {
-                            deleteStatement.setLong(1, id);
-                            deleteStatement.execute();
+                        if (writtenOk) {
+                            try (PreparedStatement deleteStatement = connection.prepareStatement("DELETE FROM folio_events WHERE id = ?")) {
+                                deleteStatement.setLong(1, id);
+                                deleteStatement.execute();
+                            }
+                            connection.commit();
                         }
-                        connection.commit();
+                        changed |= writtenOk;
                     }
-                    changed |= writtenOk;
                 }
             }
         }

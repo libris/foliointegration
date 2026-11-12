@@ -71,7 +71,7 @@ public class FolioWriting {
                 return folioToken;
 
             for (int i = 0; i < 10; ++i) {
-                try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                try (CloseableHttpClient httpClient = HttpClientBuilder.create().setUserAgent("FOLIO/LibrisXL integration").build()) {
                     URI uri = new URI(folioBaseUri);
                     uri = uri.resolve("/authn/login-with-expiry");
                     var requestBodyMap = Map.of("tenant", folioTenant, "username", username, "password", password);

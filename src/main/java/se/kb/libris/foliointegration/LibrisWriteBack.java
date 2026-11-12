@@ -485,7 +485,7 @@ public class LibrisWriteBack {
 
     // Returns response (0) and ETAG (1), null for a specific case of _findhold, (or throws)
     private static String[] doLibrisGet(URI uri) throws IOException, ProtocolException {
-        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().setUserAgent("FOLIO/LibrisXL integration").build()) {
 
             HttpGet request = new HttpGet(uri);
             RequestConfig config = RequestConfig.custom()
@@ -554,7 +554,7 @@ public class LibrisWriteBack {
         final String clientId = System.getenv("LIBRIS_CLIENT_ID");
         final String clientSecret = System.getenv("LIBRIS_CLIENT_SECRET");
 
-        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().setUserAgent("FOLIO/LibrisXL integration").build()) {
 
             HttpPost request = new HttpPost(loginUrl);
             RequestConfig config = RequestConfig.custom()

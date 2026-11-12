@@ -216,7 +216,7 @@ public class Records {
 
     public static String downloadJsonLdWithRetry(String uri) {
         for (int i = 0; i < 5; ++i) {
-            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().setUserAgent("FOLIO/LibrisXL integration").build()) {
                 HttpGet request = new HttpGet(uri);
                 URI uriWithParam = new URIBuilder(request.getUri() )
                         .addParameter("computedLabel", "sv")

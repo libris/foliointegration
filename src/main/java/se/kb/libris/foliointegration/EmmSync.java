@@ -42,7 +42,7 @@ public class EmmSync {
             newUntilTarget = now;
 
         URI uri = null;
-        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().setUserAgent("FOLIO/LibrisXL integration").build()) {
             uri = new URI(System.getenv("EMM_BASE_URL")).resolve("?until=" + newUntilTarget);
             boolean foundAlreadyTakenChange = false;
             while (uri != null) {

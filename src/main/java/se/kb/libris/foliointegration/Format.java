@@ -261,7 +261,7 @@ public class Format {
         String itemJsltUrl = System.getenv("ITEM_JSLT_URL");
         String writebackJsltUrl = System.getenv("LIBRIS_WRITEBACK_JSLT_URL");
 
-        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().setUserAgent("FOLIO/LibrisXL integration").build()) {
 
             // Get instance conversion
             {

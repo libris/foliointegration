@@ -224,7 +224,7 @@ public class EmmDumpImport {
 
             Thread.ofPlatform().name("EMM prefetch").start(new Runnable() {
                 public void run() {
-                    try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                    try (CloseableHttpClient httpClient = HttpClientBuilder.create().setUserAgent("FOLIO/LibrisXL integration").build()) {
                         HttpGet request = new HttpGet(uri);
                         RequestConfig config = RequestConfig.custom()
                                 .setConnectionRequestTimeout(Timeout.ofSeconds(5)).setConnectionKeepAlive(TimeValue.ofSeconds(5)).build();

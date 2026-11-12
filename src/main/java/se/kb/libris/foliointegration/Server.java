@@ -1,7 +1,5 @@
 package se.kb.libris.foliointegration;
 
-import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
-import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee8.servlet.ServletHolder;
 import org.eclipse.jetty.server.*;
@@ -9,7 +7,6 @@ import org.eclipse.jetty.util.thread.ExecutorThreadPool;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 

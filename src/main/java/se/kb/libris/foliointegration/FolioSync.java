@@ -25,7 +25,7 @@ public class FolioSync {
             // Read a batch, ready for syncing to folio
             long modified = syncedUntil;
             List<Long> ids = new ArrayList<>(500);
-            try (PreparedStatement statement = connection.prepareStatement("SELECT id, modified FROM entities WHERE modified > ? ORDER BY modified ASC LIMIT 30")) {
+            try (PreparedStatement statement = connection.prepareStatement("SELECT id, modified FROM entities WHERE modified > ? ORDER BY modified ASC LIMIT 60")) {
                 statement.setLong(1, syncedUntil);
                 statement.execute();
                 try (ResultSet resultSet = statement.getResultSet()) {

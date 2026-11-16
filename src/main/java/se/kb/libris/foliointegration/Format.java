@@ -508,7 +508,7 @@ public class Format {
         if (folioHoldings == null)
             folioHoldings = new ArrayList();
 
-        if (includeHoldings)
+        if (includeHoldings && !folioHoldings.isEmpty())
             converted.put("holdingsRecords", folioHoldings);
         else
             converted.remove("holdingsRecords"); // should be a NOP, but to be sure.

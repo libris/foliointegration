@@ -488,10 +488,12 @@ public class Format {
                 JsonNode itemsJsonNodeTransformed = itemsJSLT.apply(holdingsJsonNodeOriginal);
                 //Storage.log(Storage.mapper.writeValueAsString(itemsJsonNodeTransformed));
                 folioItems.addAll(Storage.mapper.treeToValue(itemsJsonNodeTransformed, List.class));
-                folioHolding.put("items", folioItems);
+                if (folioHolding != null) // We may have chosen (in jslt) to not make a holding.
+                    folioHolding.put("items", folioItems);
             }
 
-            folioHoldings.add( folioHolding );
+            if (folioHolding != null) // We may have chosen (in jslt) to not make a holding.
+                folioHoldings.add( folioHolding );
         }
         jsltFolioLookups(folioHoldings);
 

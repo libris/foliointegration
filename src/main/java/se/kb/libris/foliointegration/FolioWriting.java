@@ -211,6 +211,9 @@ public class FolioWriting {
         folioRecord.put("processing",
                         Map.of("item",
                                 Map.of("retainOmittedRecord",
+                                        Map.of("ifField", "hrid", "matchesPattern", ".*")),
+                                "holdingsRecord",
+                                Map.of("retainOmittedRecord",
                                         Map.of("ifField", "hrid", "matchesPattern", ".*"))
                         ));
 
